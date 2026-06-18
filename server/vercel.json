@@ -1,7 +1,12 @@
 {
   "installCommand": "npm install --include=dev",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
-  "functions": { "api/index.ts": { "maxDuration": 60 } },
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 60,
+      "includeFiles": "node_modules/.prisma/**"
+    }
+  },
   "crons": [
     { "path": "/api/cron/gmail-daily-sync", "schedule": "0 0 * * *" },
     { "path": "/api/cron/outlook-daily-sync", "schedule": "0 0 * * *" }
