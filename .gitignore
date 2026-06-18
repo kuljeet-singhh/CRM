@@ -13,6 +13,7 @@ dist-ssr
 *.local
 .env
 server/dist
+postman
 
 # Editor directories and files
 .vscode/*
