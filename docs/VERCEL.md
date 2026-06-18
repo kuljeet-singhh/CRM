@@ -15,6 +15,8 @@ FlyCRM deploys as **two Vercel projects** from the same Git repo.
 4. **Build Command:** `npm run vercel-build` (or `npx prisma generate && npx prisma migrate deploy && npm run build`)
 5. **Install Command:** `npm install`
 6. **Environment variables:** copy all server vars from repo-root `.env`, plus:
+   - `DATABASE_URL` — Supabase **transaction** pooler (port 6543); see [SUPABASE.md](./SUPABASE.md)
+   - `DIRECT_URL` — Supabase **session** pooler (port 5432); optional if `DATABASE_URL` is Supabase — build derives it automatically
    - `NODE_ENV=production`
    - `CRON_SECRET` — long random string (Vercel Cron and GitHub Actions send `Authorization: Bearer <CRON_SECRET>`)
    - `WEB_ORIGIN=https://<your-web-project>.vercel.app` (set after web deploy, then redeploy API)
