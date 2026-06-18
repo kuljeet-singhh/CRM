@@ -1,3 +1,3 @@
-import { createApp } from '../dist/app.js';
+import { createApp } from '../src/app.js';
 
 export default createApp();
