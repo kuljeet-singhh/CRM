@@ -1,7 +1,7 @@
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://crm-fly1-git-main-kuljeets-projects-39245158.vercel.app/api/:path*" },
-    { "source": "/auth/:path*", "destination": "https://crm-fly1-git-main-kuljeets-projects-39245158.vercel.app/auth/:path*" },
+    { "source": "/api/:path*", "destination": "https://crm-fly1.vercel.app/api/:path*" },
+    { "source": "/auth/:path*", "destination": "https://crm-fly1.vercel.app/auth/:path*" },
     { "source": "/((?!assets/).*)", "destination": "/index.html" }
   ]
 }
