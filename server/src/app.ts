@@ -26,6 +26,14 @@ export function createApp(): express.Application {
     res.json({ ok: true });
   });
 
+  app.get('/', (_req, res) => {
+    res.json({ ok: true, service: 'fly-crm-api', health: '/api/health/live' });
+  });
+
+  app.get('/api', (_req, res) => {
+    res.json({ ok: true, service: 'fly-crm-api', health: '/api/health/live' });
+  });
+
   app.use(
     cors({
       origin: env.webOrigin,
