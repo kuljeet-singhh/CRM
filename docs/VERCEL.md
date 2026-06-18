@@ -32,6 +32,12 @@ curl https://<api-project>.vercel.app/api/health/live
 # → {"ok":true}
 ```
 
+If you see **500 FUNCTION_INVOCATION_FAILED**:
+
+1. Vercel → API project → **Deployments** → latest → **Functions** / **Runtime Logs** — look for `Missing required env: ...` or Prisma errors.
+2. Confirm all required env vars are set for **Production** (not only Preview): `SESSION_SECRET`, `DATABASE_URL`, `GOOGLE_*`, `ENCRYPTION_KEY`, `WEB_ORIGIN`, OAuth redirect URIs.
+3. Redeploy after env changes.
+
 ## 2. Deploy web
 
 1. Second Vercel project → same repo, **Root Directory:** `web`
