@@ -31,7 +31,12 @@ export const env = {
   googleClientId: required('GOOGLE_CLIENT_ID'),
   googleClientSecret: required('GOOGLE_CLIENT_SECRET'),
   googleRedirectUri: required('GOOGLE_REDIRECT_URI'),
-  googleScopes: required('GOOGLE_SCOPES').split(',').map((s) => s.trim()),
+  googleScopes: optional(
+    'GOOGLE_SCOPES',
+    'openid,email,profile,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify'
+  )
+    .split(',')
+    .map((s) => s.trim()),
   encryptionKey: required('ENCRYPTION_KEY'),
   gmailPubsubTopic: optional('GMAIL_PUBSUB_TOPIC'),
   googleWebhookAudience: optional('GOOGLE_WEBHOOK_AUDIENCE'),

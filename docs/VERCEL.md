@@ -20,7 +20,12 @@ FlyCRM deploys as **two Vercel projects** from the same Git repo.
    - `NODE_ENV=production`
    - `CRON_SECRET` — long random string (Vercel Cron and GitHub Actions send `Authorization: Bearer <CRON_SECRET>`)
    - `WEB_ORIGIN=https://<your-web-project>.vercel.app` (set after web deploy, then redeploy API)
+   - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — from Google Cloud Console
    - `GOOGLE_REDIRECT_URI=https://<web>/auth/google/callback`
+   - `GOOGLE_SCOPES` — optional (defaults in code); override if needed:
+     `openid,email,profile,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify`
+   - `ENCRYPTION_KEY` — 32-byte base64 (token encryption at rest)
+   - `SESSION_SECRET` — long random string
    - `MICROSOFT_REDIRECT_URI=https://<web>/auth/microsoft/callback`
    - `OUTLOOK_WEBHOOK_URL=https://<api-project>.vercel.app` (no trailing slash)
 7. Deploy and note the API URL (e.g. `https://fly-crm-api.vercel.app`).
