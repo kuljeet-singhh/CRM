@@ -16,7 +16,7 @@ FlyCRM deploys as **two Vercel projects** from the same Git repo.
 5. **Install Command:** `npm install`
 6. **Environment variables:** copy all server vars from repo-root `.env`, plus:
    - `NODE_ENV=production`
-   - `CRON_SECRET` — long random string (Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`)
+   - `CRON_SECRET` — long random string (Vercel Cron and GitHub Actions send `Authorization: Bearer <CRON_SECRET>`)
    - `WEB_ORIGIN=https://<your-web-project>.vercel.app` (set after web deploy, then redeploy API)
    - `GOOGLE_REDIRECT_URI=https://<web>/auth/google/callback`
    - `MICROSOFT_REDIRECT_URI=https://<web>/auth/microsoft/callback`
@@ -60,27 +60,77 @@ curl https://<api-project>.vercel.app/api/health/live
 - [ ] `GET https://<web>/api/health/live` → `{ "ok": true }` (via proxy)
 - [ ] Gmail/Outlook OAuth connect
 - [ ] `/contacts` loads (no P2024)
-- [ ] Vercel → API project → Cron tab shows successful runs
+- [ ] Vercel → API project → Cron tab shows successful daily runs
+- [ ] GitHub → Actions → external cron workflows succeed (see [Hobby plan](#5-hobby-plan-option-b))
 - [ ] Supabase shows new user rows
 
 ## Local vs Vercel
 
-| Feature | Local (`npm run dev`) | Vercel |
-|---------|----------------------|--------|
-| Sync worker | Poll every 2s (`setInterval`) | Cron every 1 min |
-| Gmail/Outlook renewal | `setInterval` 6h | Cron every 6h |
-| Daily sync | `setInterval` 24h | Cron midnight UTC |
+| Feature | Local (`npm run dev`) | Vercel (Hobby + GitHub Actions) | Vercel Pro |
+|---------|----------------------|--------------------------------|------------|
+| Sync worker | Poll every 2s (`setInterval`) | GitHub Actions every 5 min | Vercel cron every 1 min |
+| Gmail/Outlook renewal | `setInterval` 6h | GitHub Actions every 6h | Vercel cron every 6h |
+| Daily sync | `setInterval` 24h | Vercel cron midnight UTC | Vercel cron midnight UTC |
 
 ## Cron routes (API only)
 
-All require `Authorization: Bearer <CRON_SECRET>`:
+All require `Authorization: Bearer <CRON_SECRET>`.
+
+### Vercel-managed (`server/vercel.json`)
+
+Hobby allows at most one run per day per cron. Only daily jobs stay in Vercel:
 
 | Path | Schedule |
 |------|----------|
-| `/api/cron/sync-worker` | `* * * * *` |
-| `/api/cron/gmail-watch-renew` | `0 */6 * * *` |
-| `/api/cron/gmail-daily-sync` | `0 0 * * *` |
-| `/api/cron/outlook-renew` | `0 */6 * * *` |
-| `/api/cron/outlook-daily-sync` | `0 0 * * *` |
+| `/api/cron/gmail-daily-sync` | `0 0 * * *` (midnight UTC) |
+| `/api/cron/outlook-daily-sync` | `0 0 * * *` (midnight UTC) |
 
-Cron jobs require a Vercel plan that supports the configured schedules (1-minute cron may need Pro).
+### GitHub Actions (Hobby workaround)
+
+Frequent jobs are triggered by [`.github/workflows/cron-sync-worker.yml`](../.github/workflows/cron-sync-worker.yml) and [`.github/workflows/cron-watch-renew.yml`](../.github/workflows/cron-watch-renew.yml):
+
+| Path | Schedule | Workflow |
+|------|----------|----------|
+| `/api/cron/sync-worker` | `*/5 * * * *` (every 5 min) | `cron-sync-worker.yml` |
+| `/api/cron/gmail-watch-renew` | `0 */6 * * *` (every 6h) | `cron-watch-renew.yml` |
+| `/api/cron/outlook-renew` | `0 */6 * * *` (every 6h) | `cron-watch-renew.yml` |
+
+On **Vercel Pro**, you can move all five crons back into `server/vercel.json` and disable the GitHub workflows.
+
+## 5. Hobby plan (Option B)
+
+Vercel Hobby blocks deploy when `server/vercel.json` includes crons that run more than once per day (e.g. `* * * * *` or `0 */6 * * *`). This repo keeps only the two daily crons in Vercel and uses **GitHub Actions** for sync-worker and watch renewal.
+
+### GitHub repo secrets
+
+After the API is deployed, add these under **Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|--------|-------|
+| `API_BASE_URL` | Full API base URL, e.g. `https://fly-crm-api.vercel.app` (no trailing slash) |
+| `CRON_SECRET` | Same value as `CRON_SECRET` on the Vercel API project |
+
+### Verify external cron
+
+1. Push to `main` (workflows only run on `main` for scheduled triggers).
+2. **Actions** → run **External cron — sync worker** and **External cron — watch renew** via **Run workflow**.
+3. Confirm green runs and `curl` exit code 0 in logs.
+
+Manual smoke test:
+
+```bash
+curl -fsS -X POST \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  "https://<api-project>.vercel.app/api/cron/sync-worker"
+# → {"ok":true}
+```
+
+### Trade-offs on Hobby
+
+- Sync worker runs every **5 minutes** (GitHub minimum), not every 1 minute — Gmail webhook queue may lag slightly vs Pro.
+- Daily sync still runs on Vercel at midnight UTC.
+- Login, contacts, and manual sync from the UI are unchanged.
+
+### Alternative: cron-job.org
+
+If you cannot use GitHub Actions, register the three URLs above at [cron-job.org](https://cron-job.org) (or similar) with the same `Authorization: Bearer <CRON_SECRET>` header and matching schedules. No repo changes needed beyond the trimmed `vercel.json`.

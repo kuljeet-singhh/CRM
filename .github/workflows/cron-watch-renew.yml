@@ -1,0 +1,30 @@
+name: External cron — watch renew
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: cron-watch-renew
+  cancel-in-progress: false
+
+jobs:
+  watch-renew:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Renew Gmail watches
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.API_BASE_URL }}/api/cron/gmail-watch-renew"
+
+      - name: Renew Outlook subscriptions
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.API_BASE_URL }}/api/cron/outlook-renew"
