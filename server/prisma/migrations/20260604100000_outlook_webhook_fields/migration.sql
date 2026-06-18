@@ -1,0 +1,3 @@
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "outlookFolderId" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "outlookSubscriptionId" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "outlookSubscriptionExpiry" TIMESTAMP(3);

@@ -1,0 +1,215 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum AuthProvider {
+  gmail
+  outlook
+  credential
+}
+
+enum ContactSource {
+  manual
+  logged_email
+  apollo
+  linkedin_csv
+}
+
+enum EmailDirection {
+  sent
+  received
+}
+
+enum RecipientRole {
+  from
+  to
+  cc
+  bcc
+}
+
+enum WorkspaceRole {
+  owner
+  admin
+  member
+}
+
+enum SyncJobType {
+  label_sync
+  thread_sync
+}
+
+enum SyncJobStatus {
+  pending
+  processing
+  done
+  failed
+}
+
+model User {
+  id                   String       @id @default(cuid())
+  email                String       @unique
+  name                 String?
+  authProvider         AuthProvider
+  googleAccessToken    String?      @db.Text
+  googleRefreshToken   String?      @db.Text
+  tokenExpiry          DateTime?
+  outlookAccessToken   String?      @db.Text
+  outlookRefreshToken  String?      @db.Text
+  outlookTokenExpiry   DateTime?
+  gmailSyncLabel       String?
+  gmailLastHistoryId   String?
+  gmailWatchExpiry     DateTime?
+  outlookSyncFolder    String?
+  outlookFolderId      String?
+  outlookSubscriptionId String?
+  outlookSubscriptionExpiry DateTime?
+  outlookInboxSubscriptionId String?
+  outlookInboxSubscriptionExpiry DateTime?
+  outlookLastDeltaToken String?     @db.Text
+  timezone             String?
+  apolloApiKey         String?      @db.Text
+  apolloLastSyncedAt   DateTime?
+  passwordHash         String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  memberships   Membership[]
+  crmLabels     CrmLabel[]
+  syncJobs      SyncJob[]
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships  Membership[]
+  contacts     Contact[]
+  emailMessages EmailMessage[]
+  crmLabels    CrmLabel[]
+  syncJobs     SyncJob[]
+}
+
+model Membership {
+  id          String        @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        WorkspaceRole @default(owner)
+  createdAt   DateTime      @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+model Contact {
+  id          String        @id @default(cuid())
+  workspaceId String
+  email       String?
+  name        String?
+  company     String?
+  title       String?
+  linkedinUrl String?
+  createdFrom ContactSource @default(logged_email)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace  Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  recipients EmailMessageRecipient[]
+
+  @@unique([workspaceId, email])
+  @@unique([workspaceId, linkedinUrl])
+}
+
+model EmailMessage {
+  id               String         @id @default(cuid())
+  workspaceId      String
+  gmailMessageId   String?
+  gmailThreadId    String?
+  conversationId   String?
+  outlookMessageId String?
+  rfcMessageId     String?
+  subject          String?
+  bodyText         String?        @db.Text
+  bodyHtml         String?        @db.Text
+  direction        EmailDirection
+  sentAt           DateTime?
+  attachments      Json?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  workspace  Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  recipients EmailMessageRecipient[]
+
+  @@unique([workspaceId, gmailMessageId])
+  @@index([workspaceId, sentAt])
+  @@index([workspaceId, conversationId])
+}
+
+model EmailMessageRecipient {
+  id             String        @id @default(cuid())
+  emailMessageId String
+  contactId      String
+  role           RecipientRole
+
+  emailMessage EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([emailMessageId, contactId, role])
+}
+
+model CrmLabel {
+  id          String   @id @default(cuid())
+  userId      String
+  workspaceId String
+  labelName   String
+  labelId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+}
+
+model SyncJob {
+  id          String        @id @default(cuid())
+  userId      String?
+  workspaceId String?
+  type        SyncJobType
+  status      SyncJobStatus @default(pending)
+  payload     Json
+  attempts    Int           @default(0)
+  maxAttempts Int           @default(5)
+  runAt       DateTime      @default(now())
+  lastError   String?       @db.Text
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([status, runAt])
+}

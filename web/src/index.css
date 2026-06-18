@@ -1,0 +1,191 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CRM Design System - Dark-first, AI-powered, modern */
+
+@layer base {
+  :root {
+    /* Light mode colors - Warmer with better borders */
+    --background: 210 20% 98%; /* Very light warm gray */
+    --foreground: 222 84% 4.9%; /* Very dark blue-gray */
+    
+    --card: 0 0% 100%; /* Pure white cards for contrast */
+    --card-foreground: 222 84% 4.9%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 84% 4.9%;
+    
+    --primary: 221 83% 53%; /* Strong blue */
+    --primary-foreground: 210 40% 98%;
+    
+    --secondary: 210 40% 94%; /* Light gray with more presence */
+    --secondary-foreground: 222 84% 4.9%;
+    
+    --muted: 210 40% 94%; /* Light gray background */
+    --muted-foreground: 215 16% 46%; /* Medium gray for good contrast */
+    
+    --accent: 210 40% 94%; /* Light accent */
+    --accent-foreground: 222 84% 4.9%;
+    
+    --success: 142 76% 36%; /* Green */
+    --success-foreground: 210 40% 98%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    
+    --border: 214 32% 82%; /* More visible borders */
+    --input: 214 32% 82%;
+    --ring: 221 83% 53%;
+    
+    --radius: 0.75rem;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(221 83% 53%), hsl(262 83% 58%));
+    --gradient-surface: linear-gradient(145deg, hsl(0 0% 100%), hsl(210 20% 96%));
+    --gradient-dark: linear-gradient(145deg, hsl(0 0% 8%), hsl(0 0% 20%));
+    
+    /* Shadows */
+    --shadow-soft: 0 2px 10px -2px hsl(221 83% 53% / 0.1);
+    --shadow-accent: 0 4px 20px -4px hsl(221 83% 53% / 0.15);
+    --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    
+    /* Sidebar */
+    --sidebar-background: 210 20% 98%;
+    --sidebar-foreground: 222 84% 4.9%;
+    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 40% 94%;
+    --sidebar-accent-foreground: 222 84% 4.9%;
+    --sidebar-border: 214 32% 82%;
+    --sidebar-ring: 221 83% 53%;
+  }
+
+  .dark {
+    /* Dark mode colors - Default mode */
+    --background: 0 0% 8%; /* #151515 */
+    --foreground: 0 0% 95%;
+    
+    --card: 0 0% 20%; /* #323232 */
+    --card-foreground: 0 0% 95%;
+    
+    --popover: 0 0% 20%;
+    --popover-foreground: 0 0% 95%;
+    
+    --primary: 79 100% 68%; /* #B6FF5F */
+    --primary-foreground: 0 0% 8%;
+    
+    --secondary: 60 2% 21%; /* #353935 */
+    --secondary-foreground: 0 0% 95%;
+    
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 65%;
+    
+    --accent: 192 95% 68%; /* #59E3FC */
+    --accent-foreground: 0 0% 8%;
+    
+    --success: 154 64% 71%; /* #A8DED1 */
+    --success-foreground: 0 0% 8%;
+    
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 85% 97%;
+    
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 79 100% 68%;
+    
+    /* Dark gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(79 100% 68%), hsl(192 95% 68%));
+    --gradient-surface: linear-gradient(145deg, hsl(0 0% 20%), hsl(60 2% 21%));
+    --gradient-dark: linear-gradient(145deg, hsl(0 0% 8%), hsl(0 0% 12%));
+    
+    /* Dark shadows */
+    --shadow-soft: 0 2px 10px -2px hsl(0 0% 0% / 0.3);
+    --shadow-accent: 0 4px 20px -4px hsl(79 100% 68% / 0.4);
+    --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.3), 0 1px 2px -1px hsl(0 0% 0% / 0.2);
+    
+    /* Dark sidebar */
+    --sidebar-background: 0 0% 8%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 79 100% 68%;
+    --sidebar-primary-foreground: 0 0% 8%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 79 100% 68%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  /* Default to dark mode */
+  html {
+    @apply dark;
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-muted/20;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30 rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+}
+
+@layer components {
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent;
+  }
+  
+  /* Glass effect */
+  .glass {
+    @apply bg-card/50 backdrop-blur-md border border-border/50;
+  }
+  
+  /* Hover glow effect */
+  .hover-glow {
+    @apply transition-shadow duration-300 hover:shadow-accent;
+  }
+  
+  /* Success variant for cards */
+  .card-success {
+    @apply bg-success/10 border-success/30;
+  }
+  
+  /* Animated gradient border */
+  .gradient-border {
+    @apply relative bg-gradient-to-r from-primary via-accent to-primary bg-size-200 animate-pulse;
+  }
+
+  /* Rendered email HTML (Outlook/Gmail inline colors) */
+  .email-body-html {
+    @apply text-foreground;
+  }
+
+  .dark .email-body-html,
+  .dark .email-body-html * {
+    color: hsl(var(--foreground)) !important;
+  }
+
+  .dark .email-body-html a {
+    color: hsl(var(--primary)) !important;
+  }
+}

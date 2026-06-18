@@ -1,0 +1,12 @@
+process.env.SESSION_SECRET = 'test-secret-test-secret-test!!';
+process.env.JWT_ACCESS_SECRET = 'test-access-secret-test-access!!';
+process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-test-refresh';
+process.env.JWT_ACCESS_TTL = '15m';
+process.env.JWT_REFRESH_TTL = '7d';
+process.env.DATABASE_URL = 'postgresql://localhost:5434/test';
+process.env.DIRECT_URL = 'postgresql://localhost:5434/test';
+process.env.GOOGLE_CLIENT_ID = 'test';
+process.env.GOOGLE_CLIENT_SECRET = 'test';
+process.env.GOOGLE_REDIRECT_URI = 'http://localhost:5173/auth/google/callback';
+process.env.GOOGLE_SCOPES = 'openid,email,profile';
+process.env.ENCRYPTION_KEY = Buffer.alloc(32).toString('base64');

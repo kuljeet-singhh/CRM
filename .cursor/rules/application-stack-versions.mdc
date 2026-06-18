@@ -1,0 +1,65 @@
+---
+description: Application stack, major dependency versions, and version-specific best practices for this repository.
+globs: **/*
+alwaysApply: true
+---
+# Application Stack and Dependency Versions
+
+Use this rule when making architecture or dependency decisions. Keep new code aligned with the current stack and version ranges declared in package manifests.
+
+## Backend Stack (`server/package.json`)
+
+- Runtime: Node.js + TypeScript (`typescript` `^5.6.3`)
+- API framework: `express` `^4.21.1`
+- Database: PostgreSQL via `pg` `^8.21.0`
+- ORM: `@prisma/client` `^5.20.0` with `prisma` `^5.20.0`
+- Auth/session middleware:
+  - `express-session` `^1.18.1`
+  - `connect-pg-simple` `^10.0.0`
+  - `cookie-parser` `^1.4.7`
+  - `cors` `^2.8.5`
+- Gmail API client: `googleapis` `^144.0.0`
+- Env handling: `dotenv` `^16.4.5` and `dotenv-cli` `^7.4.4`
+- Dev/test:
+  - `tsx` `^4.19.1`
+  - `vitest` `^4.1.7`
+  - `supertest` `^7.2.2`
+
+## Frontend Stack (`web/package.json`)
+
+- UI runtime: `react` `^18.3.1`, `react-dom` `^18.3.1`
+- Build/dev server: `vite` `^5.4.9`, `@vitejs/plugin-react` `^4.3.2`
+- Styling: `tailwindcss` `^4.3.0`, `@tailwindcss/vite` `^4.3.0`
+- UI utilities/components:
+  - `radix-ui` `^1.4.3`
+  - `lucide-react` `^1.16.0`
+  - `next-themes` `^0.4.6`
+  - `sonner` `^2.0.7`
+  - `class-variance-authority` `^0.7.1`
+  - `clsx` `^2.1.1`
+  - `tailwind-merge` `^3.6.0`
+- Language/tooling: `typescript` `^5.6.3`
+
+## Version Interpretation
+
+- Versions are declared with `^` ranges. New installs may pull newer minor/patch releases within the same major.
+- Treat `package-lock.json` as the source of exact resolved versions in each environment.
+- For reproducible CI and local parity, prefer clean installs from lockfiles and avoid ad-hoc version bumps.
+
+## Best-Practice Remarks for Current Versions
+
+- Keep `prisma` and `@prisma/client` on matching versions to avoid generated-client drift.
+- Keep `react` and `react-dom` versions aligned exactly.
+- Validate plugin compatibility when upgrading `vite`, `@vitejs/plugin-react`, and `@tailwindcss/vite`.
+- Before major upgrades (`express`, `react`, `vite`, `prisma`, `googleapis`), review release notes and migration guides.
+- Prefer pinning critical infra upgrades through focused PRs (one ecosystem at a time: backend runtime, ORM, or frontend build).
+- Re-run tests and build after dependency updates:
+  - Server: `npm run test`, `npm run build`
+  - Web: `npm run build`
+
+## Dependency Change Guidelines
+
+- Do not introduce duplicate libraries that overlap current choices (for example, additional ORMs, routing stacks, or CSS systems) without explicit approval.
+- Keep auth/session stack consistent with `express-session` + `connect-pg-simple` unless a migration is planned.
+- Keep Gmail integration on official Google APIs (`googleapis`) and preserve OAuth/token-refresh compatibility.
+- When adding dependencies, choose actively maintained packages and document why they are needed.

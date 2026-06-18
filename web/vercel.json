@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://YOUR_API_DOMAIN/api/:path*" },
+    { "source": "/auth/:path*", "destination": "https://YOUR_API_DOMAIN/auth/:path*" },
+    { "source": "/((?!assets/).*)", "destination": "/index.html" }
+  ]
+}
