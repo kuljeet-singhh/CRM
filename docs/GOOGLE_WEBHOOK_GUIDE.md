@@ -212,7 +212,7 @@ Do this once per environment (dev/staging/prod).
    - OAuth client with correct redirect URI  
    - Scopes must include **`gmail.modify`** (read mail + labels)
 
-See also: [pubsub-ngrok-setup.md](./google-webhook-tasks/pubsub-ngrok-setup.md)
+See also: [GOOGLE_CLOUD_SETUP.md](./GOOGLE_CLOUD_SETUP.md) (new project + OAuth from scratch), [pubsub-ngrok-setup.md](./google-webhook-tasks/pubsub-ngrok-setup.md)
 
 ### Environment variables
 

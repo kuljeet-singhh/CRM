@@ -3,6 +3,7 @@
 **Related documentation**
 
 - **[COMPLETE_FEATURE_SPEC.md](./COMPLETE_FEATURE_SPEC.md)** — full web + server feature spec (port to another project)
+- **[GOOGLE_CLOUD_SETUP.md](./GOOGLE_CLOUD_SETUP.md)** — create Google Cloud project, OAuth credentials, Pub/Sub (step-by-step)
 - **[GOOGLE_WEBHOOK_GUIDE.md](./GOOGLE_WEBHOOK_GUIDE.md)** — real-time Gmail sync (Pub/Sub, queue, testing)
 - **[GOOGLE_WEBHOOK_TASKS.md](./GOOGLE_WEBHOOK_TASKS.md)** — detailed webhook implementation spec
 - **[google-webhook-tasks/](./google-webhook-tasks/)** — week-by-week task checklists

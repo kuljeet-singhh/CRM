@@ -6,7 +6,7 @@ CRM with a full **Message Center** (Gmail and Outlook), JWT + OAuth sign-in, rea
 
 - **Frontend:** Vite + React + shadcn in `web/` (port `5173`)
 - **Backend:** Express + Prisma + PostgreSQL + JWT auth (access token + httpOnly refresh cookie) (port `3000`)
-- **Docs:** `docs/PROJECT_GUIDE.md`, `docs/SUPABASE.md`, `docs/COMPLETE_FEATURE_SPEC.md`, `docs/UI_STRUCTURE.md`, `docs/UI_REFERENCE.md`, `docs/GOOGLE_WEBHOOK_GUIDE.md`, `docs/gmail-webhook-integration-spec.md`, `docs/outlook-webhook-integration-spec.md`, `docs/APOLLO_INTEGRATION.md`, `docs/LINKEDIN_DATA_INTEGRATION.md`
+- **Docs:** `docs/PROJECT_GUIDE.md`, `docs/SUPABASE.md`, `docs/GOOGLE_CLOUD_SETUP.md`, `docs/COMPLETE_FEATURE_SPEC.md`, `docs/UI_STRUCTURE.md`, `docs/UI_REFERENCE.md`, `docs/GOOGLE_WEBHOOK_GUIDE.md`, `docs/gmail-webhook-integration-spec.md`, `docs/outlook-webhook-integration-spec.md`, `docs/APOLLO_INTEGRATION.md`, `docs/LINKEDIN_DATA_INTEGRATION.md`
 
 ## First run (checklist)
 
