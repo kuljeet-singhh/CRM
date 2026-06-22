@@ -6,7 +6,7 @@ import {
   ensureOutlookSubscription,
   handleSubscriptionLifecycle,
 } from '../subscriptionManager.js';
-import { scheduleOutlookSync } from '../syncRunner.js';
+import { runOutlookSyncForUser } from '../syncRunner.js';
 
 export const outlookWebhookRouter = Router();
 
@@ -85,8 +85,8 @@ async function handleNotifications(req: Request, res: Response) {
   }
 
   for (const userId of userIds) {
-    console.log('[outlook-webhook] scheduling sync', userId);
-    scheduleOutlookSync(userId, 'webhook');
+    console.log('[outlook-webhook] syncing', userId);
+    await runOutlookSyncForUser(userId, 'webhook');
   }
 
   res.status(200).end();

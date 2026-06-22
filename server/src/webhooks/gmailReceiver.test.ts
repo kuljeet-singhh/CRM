@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
-const { scheduleGmailSync } = vi.hoisted(() => ({
-  scheduleGmailSync: vi.fn(),
+const { runGmailSyncForUser } = vi.hoisted(() => ({
+  runGmailSyncForUser: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../gmail/syncRunner.js', () => ({
-  scheduleGmailSync,
+  runGmailSyncForUser,
 }));
 
 vi.mock('../db.js', () => ({
@@ -39,7 +39,7 @@ describe('gmail webhook', () => {
       .send({ message: {} });
 
     expect(res.status).toBe(200);
-    expect(scheduleGmailSync).not.toHaveBeenCalled();
+    expect(runGmailSyncForUser).not.toHaveBeenCalled();
   });
 
   it('returns 400 for invalid decoded payload', async () => {
@@ -50,10 +50,10 @@ describe('gmail webhook', () => {
       .send({ message: { data } });
 
     expect(res.status).toBe(400);
-    expect(scheduleGmailSync).not.toHaveBeenCalled();
+    expect(runGmailSyncForUser).not.toHaveBeenCalled();
   });
 
-  it('schedules sync when user and label exist', async () => {
+  it('runs sync when user and label exist', async () => {
     vi.mocked(prisma.user.findFirst).mockResolvedValue({
       id: 'u1',
       email: 'user@gmail.com',
@@ -75,6 +75,6 @@ describe('gmail webhook', () => {
       .send({ message: { data } });
 
     expect(res.status).toBe(200);
-    expect(scheduleGmailSync).toHaveBeenCalledWith('u1', 'webhook');
+    expect(runGmailSyncForUser).toHaveBeenCalledWith('u1', 'webhook');
   });
 });

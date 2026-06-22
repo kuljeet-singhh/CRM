@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
-const { scheduleOutlookSync, ensureOutlookSubscription } = vi.hoisted(() => ({
-  scheduleOutlookSync: vi.fn(),
+const { runOutlookSyncForUser, ensureOutlookSubscription } = vi.hoisted(() => ({
+  runOutlookSyncForUser: vi.fn().mockResolvedValue(undefined),
   ensureOutlookSubscription: vi.fn().mockResolvedValue({ expiresAt: new Date() }),
 }));
 
 vi.mock('../outlook/syncRunner.js', () => ({
-  scheduleOutlookSync,
+  runOutlookSyncForUser,
 }));
 
 vi.mock('../env.js', () => ({
@@ -50,17 +50,17 @@ describe('outlook webhook', () => {
 
     expect(res.status).toBe(200);
     expect(res.text).toBe('abc123');
-    expect(scheduleOutlookSync).not.toHaveBeenCalled();
+    expect(runOutlookSyncForUser).not.toHaveBeenCalled();
   });
 
   it('returns 200 for empty notification batch', async () => {
     const res = await request(createApp()).post('/api/webhooks/outlook').send({ value: [] });
 
     expect(res.status).toBe(200);
-    expect(scheduleOutlookSync).not.toHaveBeenCalled();
+    expect(runOutlookSyncForUser).not.toHaveBeenCalled();
   });
 
-  it('schedules sync when user and clientState match', async () => {
+  it('runs sync when user and clientState match', async () => {
     vi.mocked(prisma.user.findFirst).mockResolvedValue({
       id: 'u1',
       authProvider: 'outlook',
@@ -80,10 +80,10 @@ describe('outlook webhook', () => {
       });
 
     expect(res.status).toBe(200);
-    expect(scheduleOutlookSync).toHaveBeenCalledWith('u1', 'webhook');
+    expect(runOutlookSyncForUser).toHaveBeenCalledWith('u1', 'webhook');
   });
 
-  it('schedules sync when inbox subscriptionId matches', async () => {
+  it('runs sync when inbox subscriptionId matches', async () => {
     vi.mocked(prisma.user.findFirst).mockResolvedValue({
       id: 'u1',
       authProvider: 'outlook',
@@ -105,7 +105,7 @@ describe('outlook webhook', () => {
       });
 
     expect(res.status).toBe(200);
-    expect(scheduleOutlookSync).toHaveBeenCalledWith('u1', 'webhook');
+    expect(runOutlookSyncForUser).toHaveBeenCalledWith('u1', 'webhook');
     expect(prisma.user.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -118,7 +118,7 @@ describe('outlook webhook', () => {
     );
   });
 
-  it('schedules sync for orphan subscription with valid clientState', async () => {
+  it('runs sync for orphan subscription with valid clientState', async () => {
     vi.mocked(prisma.user.findFirst)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
@@ -140,7 +140,7 @@ describe('outlook webhook', () => {
       });
 
     expect(res.status).toBe(200);
-    expect(scheduleOutlookSync).toHaveBeenCalledWith('u1', 'webhook');
+    expect(runOutlookSyncForUser).toHaveBeenCalledWith('u1', 'webhook');
     expect(ensureOutlookSubscription).toHaveBeenCalledWith('u1');
   });
 
@@ -158,6 +158,6 @@ describe('outlook webhook', () => {
       });
 
     expect(res.status).toBe(200);
-    expect(scheduleOutlookSync).not.toHaveBeenCalled();
+    expect(runOutlookSyncForUser).not.toHaveBeenCalled();
   });
 });

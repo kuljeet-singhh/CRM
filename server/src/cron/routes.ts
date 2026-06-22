@@ -5,6 +5,7 @@ import { renewExpiredWatches } from '../gmail/watchManager.js';
 import { runDailyGmailSync } from '../gmail/dailySync.js';
 import { renewAllOutlookSubscriptions } from '../outlook/subscriptionManager.js';
 import { runDailyOutlookSync } from '../outlook/dailySync.js';
+import { runIncrementalMailboxSync } from './mailboxSync.js';
 
 export const cronRouter = Router();
 
@@ -26,7 +27,8 @@ cronRouter.use(requireCronSecret);
 
 cronRouter.all('/sync-worker', async (_req, res) => {
   await pollOnce();
-  res.json({ ok: true });
+  const mailbox = await runIncrementalMailboxSync();
+  res.json({ ok: true, ...mailbox });
 });
 
 cronRouter.all('/gmail-watch-renew', async (_req, res) => {

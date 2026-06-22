@@ -4,7 +4,7 @@ import { manualOutlookSync, type OutlookSyncResult } from './sync.js';
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const inFlight = new Map<string, Promise<void>>();
 
-export type OutlookSyncLogPrefix = 'webhook' | 'settings' | 'daily' | 'manual';
+export type OutlookSyncLogPrefix = 'webhook' | 'settings' | 'daily' | 'manual' | 'cron';
 
 async function getDefaultWorkspaceId(userId: string): Promise<string | null> {
   const membership = await prisma.membership.findFirst({

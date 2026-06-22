@@ -83,6 +83,10 @@ export async function syncUserGmail(userId: string, workspaceId?: string): Promi
     for (const id of await listLabeledMessageIds(gmail, label.id, 100)) {
       messageIdSet.add(id);
     }
+  } else {
+    for (const id of await listLabeledMessageIds(gmail, label.id, 30)) {
+      messageIdSet.add(id);
+    }
   }
 
   const profile = await gmail.users.getProfile({ userId: 'me' });

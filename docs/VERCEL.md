@@ -81,9 +81,11 @@ If you see **500 FUNCTION_INVOCATION_FAILED**:
 
 | Feature | Local (`npm run dev`) | Vercel (Hobby + GitHub Actions) | Vercel Pro |
 |---------|----------------------|--------------------------------|------------|
-| Sync worker | Poll every 2s (`setInterval`) | GitHub Actions every 5 min | Vercel cron every 1 min |
+| Sync worker | Poll every 2s (`setInterval`) + `syncUserGmail` | GitHub Actions every 5 min — drains queue + incremental Gmail/Outlook sync for all users | Vercel cron every 1 min |
+| Gmail/Outlook push | Webhook handler awaits sync | Webhook handler awaits sync (serverless-safe) | Same |
 | Gmail/Outlook renewal | `setInterval` 6h | GitHub Actions every 6h | Vercel cron every 6h |
 | Daily sync | `setInterval` 24h | Vercel cron midnight UTC | Vercel cron midnight UTC |
+| Manual **Sync** button | `POST /api/gmail/sync` or `/api/outlook/sync` | Same | Same |
 
 ## Cron routes (API only)
 
@@ -102,11 +104,13 @@ Hobby allows at most one run per day per cron. Only daily jobs stay in Vercel:
 
 Frequent jobs are triggered by [`.github/workflows/cron-sync-worker.yml`](../.github/workflows/cron-sync-worker.yml) and [`.github/workflows/cron-watch-renew.yml`](../.github/workflows/cron-watch-renew.yml):
 
-| Path | Schedule | Workflow |
-|------|----------|----------|
-| `/api/cron/sync-worker` | `*/5 * * * *` (every 5 min) | `cron-sync-worker.yml` |
-| `/api/cron/gmail-watch-renew` | `0 */6 * * *` (every 6h) | `cron-watch-renew.yml` |
-| `/api/cron/outlook-renew` | `0 */6 * * *` (every 6h) | `cron-watch-renew.yml` |
+| Path | Schedule | What it does |
+|------|----------|--------------|
+| `/api/cron/sync-worker` | `*/5 * * * *` (every 5 min) | Drains legacy `SyncJob` queue, then runs incremental Gmail + Outlook sync for all configured users |
+| `/api/cron/gmail-watch-renew` | `0 */6 * * *` (every 6h) | Renews expired Gmail Pub/Sub watches |
+| `/api/cron/outlook-renew` | `0 */6 * * *` (every 6h) | Renews Outlook Graph webhook subscriptions |
+
+Gmail/Outlook **push webhooks** also run sync immediately when a notification arrives (no `setTimeout` debounce on serverless).
 
 On **Vercel Pro**, you can move all five crons back into `server/vercel.json` and disable the GitHub workflows.
 
@@ -130,7 +134,7 @@ After the API is deployed, add these under **Settings → Secrets and variables 
    - `API_BASE_URL` = `https://crm-fly1.vercel.app` (not `fly-crm-api.vercel.app` — that URL does not exist)
    - `CRON_SECRET` = identical to the Vercel API project env var
 3. **Actions** → run **External cron — sync worker** and **External cron — watch renew** via **Run workflow**.
-4. Confirm green runs; logs show `HTTP 200` and `{"ok":true}`.
+4. Confirm green runs; logs show `HTTP 200` and `{"ok":true,"gmailUsers":N,"outlookUsers":N}`.
 
 If a workflow fails, open the run log — the trigger step prints HTTP status and response body (401 = secret mismatch, 404 = wrong `API_BASE_URL`).
 
@@ -139,15 +143,15 @@ Manual smoke test:
 ```bash
 curl -fsS -X POST \
   -H "Authorization: Bearer $CRON_SECRET" \
-  "https://<api-project>.vercel.app/api/cron/sync-worker"
-# → {"ok":true}
+  "https://crm-fly1.vercel.app/api/cron/sync-worker"
+# → {"ok":true,"gmailUsers":1,"outlookUsers":0}
 ```
 
 ### Trade-offs on Hobby
 
-- Sync worker runs every **5 minutes** (GitHub minimum), not every 1 minute — Gmail webhook queue may lag slightly vs Pro.
-- Daily sync still runs on Vercel at midnight UTC.
-- Login, contacts, and manual sync from the UI are unchanged.
+- Sync worker runs every **5 minutes** (GitHub minimum) and performs real mailbox sync — catches Gmail thread replies even when push webhooks are delayed.
+- Daily sync still runs on Vercel at midnight UTC as a safety net.
+- Login, contacts, and manual **Sync** in the inbox UI are unchanged.
 
 ### Alternative: cron-job.org
 

@@ -3,7 +3,7 @@ import { syncUserGmail } from './syncUserGmail.js';
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const inFlight = new Map<string, Promise<void>>();
 
-export type SyncLogPrefix = 'webhook' | 'settings' | 'daily' | 'manual';
+export type SyncLogPrefix = 'webhook' | 'settings' | 'daily' | 'manual' | 'cron';
 
 function logSyncResult(userId: string, prefix: SyncLogPrefix, result: Awaited<ReturnType<typeof syncUserGmail>>) {
   if (result.error === 'no_sync_label' || result.error === 'label_not_found' || result.error === 'no_workspace') {

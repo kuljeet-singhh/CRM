@@ -3,7 +3,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { prisma } from '../../db.js';
 import { env } from '../../env.js';
 import { decodeGmailPushData } from './decode.js';
-import { scheduleGmailSync } from '../syncRunner.js';
+import { runGmailSyncForUser } from '../syncRunner.js';
 
 export const gmailWebhookRouter = Router();
 
@@ -60,7 +60,7 @@ gmailWebhookRouter.post('/gmail', async (req, res) => {
       return;
     }
 
-    scheduleGmailSync(user.id, 'webhook');
+    await runGmailSyncForUser(user.id, 'webhook');
     res.status(200).end();
   } catch (err) {
     console.error('[gmail-webhook] processing_failed', err);
