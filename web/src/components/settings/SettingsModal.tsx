@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -83,6 +84,8 @@ export function SettingsModal({
   const [linkedinImporting, setLinkedinImporting] = useState(false);
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [calendarSyncEnabled, setCalendarSyncEnabled] = useState(false);
+  const [calendarToggling, setCalendarToggling] = useState(false);
 
   const timezones = useMemo(() => allTimezones(), []);
 
@@ -120,6 +123,7 @@ export function SettingsModal({
         if (settingsData) {
           setSavedLabel(settingsData.syncSelector);
           setTimezone(settingsData.timezone ?? SYSTEM_DEFAULT);
+          setCalendarSyncEnabled(Boolean(settingsData.calendarSyncEnabled));
           const pending = sessionStorage.getItem('pendingLabel');
           if (pending && !settingsData.syncSelector) {
             setLabel(pending);
@@ -131,6 +135,31 @@ export function SettingsModal({
       })
       .finally(() => setLoading(false));
   }, [open]);
+
+  async function toggleCalendarSync(enabled: boolean) {
+    setCalendarToggling(true);
+    setError(null);
+    setErrorKind(null);
+    try {
+      const data = await api<UserSettings>('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ calendarSyncEnabled: enabled }),
+      });
+      setCalendarSyncEnabled(Boolean(data.calendarSyncEnabled));
+      await refreshSettings();
+      toast.success(enabled ? 'Calendar sync enabled.' : 'Calendar sync disabled.');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+        setErrorKind(errorKindFromCode(err.code));
+      } else {
+        setError('Failed to update calendar sync');
+        setErrorKind('other');
+      }
+    } finally {
+      setCalendarToggling(false);
+    }
+  }
 
   async function save() {
     const trimmed = label.trim();
@@ -416,6 +445,23 @@ export function SettingsModal({
                 )}
               </div>
             )}
+
+            <Separator />
+
+            <div className="flex items-center justify-between gap-4 rounded-md border border-border/50 bg-muted/20 px-3 py-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="settings-calendar-sync">Sync primary calendar</Label>
+                <p className="text-xs text-muted-foreground">
+                  Read-only import of your primary {providerName} calendar into CRM.
+                </p>
+              </div>
+              <Switch
+                id="settings-calendar-sync"
+                checked={calendarSyncEnabled}
+                disabled={calendarToggling || loading}
+                onCheckedChange={(checked) => void toggleCalendarSync(checked)}
+              />
+            </div>
 
             <Separator />
 

@@ -99,6 +99,7 @@ Hobby allows at most one run per day per cron. Only daily jobs stay in Vercel:
 |------|----------|
 | `/api/cron/gmail-daily-sync` | `0 0 * * *` (midnight UTC) |
 | `/api/cron/outlook-daily-sync` | `0 0 * * *` (midnight UTC) |
+| `/api/cron/calendar-daily-sync` | `0 1 * * *` (01:00 UTC) |
 
 ### GitHub Actions (Hobby workaround)
 

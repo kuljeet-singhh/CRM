@@ -6,6 +6,7 @@ import {
   Target,
   CheckSquare,
   Mail,
+  CalendarDays,
   FileText,
   Settings,
   Zap,
@@ -35,6 +36,7 @@ const mainItems = [
 
 const toolsItems = [
   { title: "Message Center", url: "/email", icon: Mail },
+  { title: "Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Reports", url: "/reports", icon: FileText },
   { title: "AI Assistant", url: "/ai", icon: Zap },
 ]

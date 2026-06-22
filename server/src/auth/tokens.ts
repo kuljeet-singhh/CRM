@@ -1,9 +1,9 @@
-import { google } from 'googleapis';
+import { google, type Auth } from 'googleapis';
 import { prisma } from '../db.js';
 import { env } from '../env.js';
 import { decrypt, encrypt } from './crypto.js';
 
-export async function getAuthorizedClient(userId: string) {
+async function buildGoogleOAuth2(userId: string): Promise<Auth.OAuth2Client> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user?.googleRefreshToken) {
     throw new Error('reauth_required');
@@ -33,6 +33,15 @@ export async function getAuthorizedClient(userId: string) {
     });
   });
 
+  return oauth2;
+}
+
+export async function getGoogleOAuth2(userId: string): Promise<Auth.OAuth2Client> {
+  return buildGoogleOAuth2(userId);
+}
+
+export async function getAuthorizedClient(userId: string) {
+  const oauth2 = await buildGoogleOAuth2(userId);
   return google.gmail({ version: 'v1', auth: oauth2 });
 }
 

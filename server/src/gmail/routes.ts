@@ -5,9 +5,11 @@ import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
 import { getAuthorizedClient } from '../auth/tokens.js';
 import { sendGmailMessage } from './send.js';
 import { manualGmailSync } from './sync.js';
+import { gmailCalendarRouter } from './calendar/routes.js';
 
 export const gmailRouter = Router();
 gmailRouter.use(requireAuth);
+gmailRouter.use('/calendar', gmailCalendarRouter);
 
 const UI_REFRESH_INTERVAL_MS = 15_000;
 const MAIL_SYNC_INTERVAL_MS = 86_400_000;

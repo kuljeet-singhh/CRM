@@ -53,11 +53,18 @@ export function useUserPrefs() {
   return { ...rest, refresh: refreshSettings };
 }
 
-import { formatRelativeTime as fmtRelative } from './formatters';
+import {
+  formatCalendarEventRange as fmtCalendarRange,
+  formatDateTime as fmtDateTime,
+  formatRelativeTime as fmtRelative,
+} from './formatters';
 
 export function useFormatters() {
   const { timezone } = usePreferences();
   return {
     formatRelativeTime: (iso: string) => fmtRelative(iso, timezone),
+    formatDateTime: (iso: string) => fmtDateTime(iso, timezone),
+    formatCalendarEventRange: (startsAt: string, endsAt: string, allDay: boolean) =>
+      fmtCalendarRange(startsAt, endsAt, allDay, timezone),
   };
 }

@@ -21,6 +21,7 @@ import Tasks from "./pages/Tasks";
 import Email from "./pages/Email";
 import Reports from "./pages/Reports";
 import AI from "./pages/AI";
+import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
 
 const queryClient = new QueryClient({
@@ -49,6 +50,7 @@ function AppRoutes() {
                 <Route path="/pipeline" element={<Pipeline />} />
                 <Route path="/tasks" element={<Tasks />} />
                 <Route path="/email" element={<Email />} />
+                <Route path="/calendar" element={<Calendar />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/ai" element={<AI />} />
                 <Route path="/settings" element={<Settings />} />

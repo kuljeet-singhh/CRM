@@ -6,6 +6,7 @@ import { runDailyGmailSync } from '../gmail/dailySync.js';
 import { renewAllOutlookSubscriptions } from '../outlook/subscriptionManager.js';
 import { runDailyOutlookSync } from '../outlook/dailySync.js';
 import { runIncrementalMailboxSync } from './mailboxSync.js';
+import { runDailyCalendarSync } from './calendarDailySync.js';
 
 export const cronRouter = Router();
 
@@ -49,4 +50,9 @@ cronRouter.all('/outlook-renew', async (_req, res) => {
 cronRouter.all('/outlook-daily-sync', async (_req, res) => {
   await runDailyOutlookSync();
   res.json({ ok: true });
+});
+
+cronRouter.all('/calendar-daily-sync', async (_req, res) => {
+  const result = await runDailyCalendarSync();
+  res.json({ ok: true, ...result });
 });

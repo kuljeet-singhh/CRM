@@ -12,6 +12,7 @@
   },
   "crons": [
     { "path": "/api/cron/gmail-daily-sync", "schedule": "0 0 * * *" },
-    { "path": "/api/cron/outlook-daily-sync", "schedule": "0 0 * * *" }
+    { "path": "/api/cron/outlook-daily-sync", "schedule": "0 0 * * *" },
+    { "path": "/api/cron/calendar-daily-sync", "schedule": "0 1 * * *" }
   ]
 }

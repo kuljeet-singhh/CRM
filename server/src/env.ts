@@ -33,7 +33,7 @@ export const env = {
   googleRedirectUri: required('GOOGLE_REDIRECT_URI'),
   googleScopes: optional(
     'GOOGLE_SCOPES',
-    'openid,email,profile,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify'
+    'openid,email,profile,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify,https://www.googleapis.com/auth/calendar.readonly'
   )
     .split(',')
     .map((s) => s.trim()),
@@ -48,8 +48,10 @@ export const env = {
   microsoftTenantId: optional('MICROSOFT_TENANT_ID', 'common'),
   microsoftScopes: optional(
     'MICROSOFT_SCOPES',
-    'openid profile email offline_access User.Read Mail.ReadWrite Mail.Send'
+    'openid profile email offline_access User.Read Mail.ReadWrite Mail.Send Calendars.Read'
   ).split(' '),
+  calendarSyncPastDays: parseInt(optional('CALENDAR_SYNC_PAST_DAYS', '90'), 10),
+  calendarSyncFutureDays: parseInt(optional('CALENDAR_SYNC_FUTURE_DAYS', '365'), 10),
   outlookWebhookUrl: optional('OUTLOOK_WEBHOOK_URL').replace(/\/$/, ''),
   outlookWebhookClientState: optional('OUTLOOK_WEBHOOK_CLIENT_STATE'),
   cronSecret: optional('CRON_SECRET'),

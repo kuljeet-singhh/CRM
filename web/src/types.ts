@@ -64,8 +64,41 @@ export interface UserSettings {
   gmailSyncLabel: string | null;
   outlookSyncFolder: string | null;
   timezone: string | null;
+  calendarSyncEnabled?: boolean;
+  calendarLastSyncedAt?: string | null;
   watchWarning?: string;
   subscriptionWarning?: string;
+}
+
+export interface CalendarSyncConfig {
+  enabled: boolean;
+  pushEnabled: boolean;
+  syncIntervalMs: number;
+  lastSyncedAt: string | null;
+}
+
+export interface CalendarEventItem {
+  id: string;
+  title: string | null;
+  description: string | null;
+  startsAt: string;
+  endsAt: string;
+  allDay: boolean;
+  location: string | null;
+  organizerEmail: string | null;
+  attendees: Array<{ email: string; name?: string; responseStatus?: string }>;
+  htmlLink: string | null;
+  webLink: string | null;
+  isCancelled: boolean;
+  provider: MailProvider;
+}
+
+export interface CalendarSyncResult {
+  imported: number;
+  updated: number;
+  cancelled: number;
+  syncTokenSaved?: boolean;
+  error?: string;
 }
 
 export interface GmailSyncConfig {

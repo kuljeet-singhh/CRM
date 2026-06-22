@@ -1,3 +1,55 @@
+function dateTimeOptions(timezone?: string | null): Intl.DateTimeFormatOptions {
+  return timezone ? { timeZone: timezone } : {};
+}
+
+export function formatDateTime(iso: string, timezone?: string | null): string {
+  const date = new Date(iso);
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    ...dateTimeOptions(timezone),
+  });
+}
+
+export function formatCalendarEventRange(
+  startsAt: string,
+  endsAt: string,
+  allDay: boolean,
+  timezone?: string | null
+): string {
+  if (allDay) {
+    const date = new Date(startsAt);
+    const datePart = date.toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      ...dateTimeOptions(timezone),
+    });
+    return `${datePart} (all day)`;
+  }
+
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+  const tz = dateTimeOptions(timezone);
+  const timeOpts: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', ...tz };
+
+  if (start.toDateString() === end.toDateString()) {
+    const datePart = start.toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      ...tz,
+    });
+    return `${datePart}, ${start.toLocaleTimeString(undefined, timeOpts)} – ${end.toLocaleTimeString(undefined, timeOpts)}`;
+  }
+
+  return `${formatDateTime(startsAt, timezone)} – ${formatDateTime(endsAt, timezone)}`;
+}
+
 export function formatRelativeTime(iso: string, timezone?: string | null): string {
   const date = new Date(iso);
   const now = new Date();

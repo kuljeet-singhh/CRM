@@ -9,6 +9,11 @@ import { isMicrosoftConfigured } from '../env.js';
 import { findFolderByDisplayName, listOutlookMailFolders } from '../outlook/folders.js';
 import { ensureOutlookSubscription } from '../outlook/subscriptionManager.js';
 import { runOutlookSyncForUser } from '../outlook/syncRunner.js';
+import { deriveMailProvider } from '../auth/userResponse.js';
+import { probeGoogleCalendarScope } from '../gmail/calendar/sync.js';
+import { runGoogleCalendarSyncForUser } from '../gmail/calendar/syncRunner.js';
+import { probeOutlookCalendarScope } from '../outlook/calendar/sync.js';
+import { runOutlookCalendarSyncForUser } from '../outlook/calendar/syncRunner.js';
 
 export const settingsRouter = Router();
 settingsRouter.use(requireAuth);
@@ -24,9 +29,22 @@ function settingsPayload(
     gmailSyncLabel: string | null;
     outlookSyncFolder: string | null;
     timezone: string | null;
+    calendarSyncEnabled: boolean;
+    googleCalendarLastSyncedAt: Date | null;
+    outlookCalendarLastSyncedAt: Date | null;
+    googleRefreshToken: string | null;
+    outlookRefreshToken: string | null;
   },
   extras?: { watchWarning?: string; subscriptionWarning?: string }
 ) {
+  const mailProvider = deriveMailProvider(user as Parameters<typeof deriveMailProvider>[0]);
+  const calendarLastSyncedAt =
+    mailProvider === 'gmail'
+      ? user.googleCalendarLastSyncedAt?.toISOString() ?? null
+      : mailProvider === 'outlook'
+        ? user.outlookCalendarLastSyncedAt?.toISOString() ?? null
+        : null;
+
   return {
     name: user.name,
     email: user.email,
@@ -36,6 +54,8 @@ function settingsPayload(
     gmailSyncLabel: user.gmailSyncLabel,
     outlookSyncFolder: user.outlookSyncFolder,
     timezone: user.timezone,
+    calendarSyncEnabled: user.calendarSyncEnabled,
+    calendarLastSyncedAt,
     ...extras,
   };
 }
@@ -57,17 +77,20 @@ settingsRouter.put('/', async (req: AuthedRequest, res) => {
     return;
   }
 
-  const { syncSelector, gmailSyncLabel, outlookSyncFolder, timezone, name } = req.body as {
+  const { syncSelector, gmailSyncLabel, outlookSyncFolder, timezone, name, calendarSyncEnabled } =
+    req.body as {
     syncSelector?: string;
     gmailSyncLabel?: string;
     outlookSyncFolder?: string;
     timezone?: string;
     name?: string | null;
+    calendarSyncEnabled?: boolean;
   };
 
   const data: Record<string, unknown> = {};
   let watchWarning: string | undefined;
   let subscriptionWarning: string | undefined;
+  const wasCalendarEnabled = user.calendarSyncEnabled;
 
   if (name !== undefined) {
     const trimmed = typeof name === 'string' ? name.trim() : '';
@@ -174,10 +197,42 @@ settingsRouter.put('/', async (req: AuthedRequest, res) => {
     }
   }
 
+  if (calendarSyncEnabled !== undefined) {
+    if (calendarSyncEnabled && !deriveMailProvider(user)) {
+      res.status(400).json({ error: 'no_mail_provider' });
+      return;
+    }
+
+    if (calendarSyncEnabled) {
+      const provider = deriveMailProvider(user);
+      const ok =
+        provider === 'gmail'
+          ? await probeGoogleCalendarScope(req.userId!)
+          : provider === 'outlook'
+            ? await probeOutlookCalendarScope(req.userId!)
+            : false;
+      if (!ok) {
+        res.status(403).json({ error: 'insufficient_scope' });
+        return;
+      }
+    }
+
+    data.calendarSyncEnabled = calendarSyncEnabled;
+  }
+
   const updated = await prisma.user.update({
     where: { id: req.userId! },
     data,
   });
+
+  if (calendarSyncEnabled === true && !wasCalendarEnabled) {
+    const provider = deriveMailProvider(updated);
+    if (provider === 'gmail') {
+      void runGoogleCalendarSyncForUser(req.userId!, 'settings');
+    } else if (provider === 'outlook') {
+      void runOutlookCalendarSyncForUser(req.userId!, 'settings');
+    }
+  }
 
   res.json(settingsPayload(updated, { watchWarning, subscriptionWarning }));
 });

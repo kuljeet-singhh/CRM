@@ -8,6 +8,8 @@ import { Users, Search, Mail, Calendar, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useFormatters } from '@/lib/preferences';
 import type { CrmContact, ContactSource } from '@/types';
+import { ContactUpcomingMeetings } from '@/components/calendar/ContactUpcomingMeetings';
+import { usePreferences } from '@/lib/preferences';
 
 function sourceLabel(source: ContactSource): string {
   if (source === 'apollo') return 'Apollo';
@@ -41,6 +43,8 @@ function initials(contact: CrmContact): string {
 
 export default function Contacts() {
   const { formatRelativeTime } = useFormatters();
+  const { settings } = usePreferences();
+  const calendarSyncEnabled = Boolean(settings?.calendarSyncEnabled);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
 
@@ -182,6 +186,13 @@ export default function Contacts() {
                   <ExternalLink className="h-4 w-4 shrink-0" />
                   <span className="truncate">LinkedIn profile</span>
                 </a>
+              )}
+
+              {contact.email && (
+                <ContactUpcomingMeetings
+                  contactId={contact.id}
+                  enabled={calendarSyncEnabled && Boolean(contact.email)}
+                />
               )}
 
               <div className="flex items-center gap-2 pt-2 border-t border-border/30">

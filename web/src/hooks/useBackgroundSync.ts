@@ -4,7 +4,8 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { mailApiBase } from '@/lib/provider';
 import { syncToastMessage } from '@/lib/syncResult';
-import type { GmailSyncConfig, MailProvider, SyncResult } from '@/types';
+import { usePreferences } from '@/lib/preferences';
+import type { CalendarSyncConfig, CalendarSyncResult, GmailSyncConfig, MailProvider, SyncResult } from '@/types';
 
 const POLL_SYNC_INTERVAL_MS = 3 * 60 * 1000;
 const DEFAULT_UI_REFRESH_MS = 15_000;
@@ -38,12 +39,30 @@ function markDailySync(userId: string) {
   localStorage.setItem(dailySyncStorageKey(userId), String(Date.now()));
 }
 
+function dailyCalendarSyncStorageKey(userId: string) {
+  return `flycrm:lastCalendarSync:${userId}`;
+}
+
+function shouldRunDailyCalendarSync(userId: string, intervalMs: number): boolean {
+  const raw = localStorage.getItem(dailyCalendarSyncStorageKey(userId));
+  if (!raw) return true;
+  const last = parseInt(raw, 10);
+  if (Number.isNaN(last)) return true;
+  return Date.now() - last >= intervalMs;
+}
+
+function markDailyCalendarSync(userId: string) {
+  localStorage.setItem(dailyCalendarSyncStorageKey(userId), String(Date.now()));
+}
+
 export function useBackgroundSync(
   provider: MailProvider | null | undefined,
   userId: string | undefined,
   enabled: boolean
 ) {
   const queryClient = useQueryClient();
+  const { settings } = usePreferences();
+  const calendarSyncEnabled = Boolean(settings?.calendarSyncEnabled);
 
   const gmailSyncConfigQuery = useQuery({
     queryKey: ['gmail', 'sync-config'],
@@ -59,6 +78,20 @@ export function useBackgroundSync(
     staleTime: 60_000,
   });
 
+  const gmailCalendarSyncConfigQuery = useQuery({
+    queryKey: ['gmail', 'calendar', 'sync-config'],
+    queryFn: () => api<CalendarSyncConfig>('/api/gmail/calendar/sync-config'),
+    enabled: enabled && provider === 'gmail' && calendarSyncEnabled,
+    staleTime: 60_000,
+  });
+
+  const outlookCalendarSyncConfigQuery = useQuery({
+    queryKey: ['outlook', 'calendar', 'sync-config'],
+    queryFn: () => api<CalendarSyncConfig>('/api/outlook/calendar/sync-config'),
+    enabled: enabled && provider === 'outlook' && calendarSyncEnabled,
+    staleTime: 60_000,
+  });
+
   const syncConfig =
     provider === 'gmail' ? gmailSyncConfigQuery.data : outlookSyncConfigQuery.data;
   const syncConfigPending =
@@ -71,6 +104,31 @@ export function useBackgroundSync(
   const pushEnabled = Boolean(syncConfig?.pushEnabled);
   const uiRefreshMs = syncConfig?.uiRefreshIntervalMs ?? DEFAULT_UI_REFRESH_MS;
   const mailSyncMs = syncConfig?.mailSyncIntervalMs ?? DEFAULT_MAIL_SYNC_MS;
+  const calendarSyncConfig =
+    provider === 'gmail' ? gmailCalendarSyncConfigQuery.data : outlookCalendarSyncConfigQuery.data;
+  const calendarSyncMs = calendarSyncConfig?.syncIntervalMs ?? DEFAULT_MAIL_SYNC_MS;
+
+  useEffect(() => {
+    if (!provider || !enabled || !userId || !calendarSyncEnabled) return;
+
+    const runCalendarSync = async () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!shouldRunDailyCalendarSync(userId, calendarSyncMs)) return;
+      try {
+        await api<CalendarSyncResult>(`${mailApiBase(provider)}/calendar/sync`, {
+          method: 'POST',
+        });
+        markDailyCalendarSync(userId);
+        queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      } catch {
+        /* silent */
+      }
+    };
+
+    void runCalendarSync();
+    const id = setInterval(runCalendarSync, calendarSyncMs);
+    return () => clearInterval(id);
+  }, [provider, enabled, userId, calendarSyncEnabled, calendarSyncMs, queryClient]);
 
   useEffect(() => {
     if (!provider || !enabled || !userId) return;

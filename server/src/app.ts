@@ -13,6 +13,7 @@ import { gmailWebhookRouter } from './webhooks/gmailReceiver.js';
 import { outlookWebhookRouter } from './webhooks/outlookReceiver.js';
 import { devRouter } from './dev/routes.js';
 import { cronRouter } from './cron/routes.js';
+import { calendarRouter } from './calendar/routes.js';
 import { renewExpiredWatches, countWatchIssues } from './gmail/watchManager.js';
 import { countOutlookSubscriptionIssues } from './outlook/subscriptionManager.js';
 import { env, isOutlookPushEnabled } from './env.js';
@@ -55,6 +56,7 @@ export function createApp(): express.Application {
   app.use('/api/settings', settingsRouter);
   app.use('/api/apollo', apolloRouter);
   app.use('/api/messages', messagesRouter);
+  app.use('/api/calendar', calendarRouter);
 
   if (!env.isProd) {
     app.use('/api/dev', devRouter);
