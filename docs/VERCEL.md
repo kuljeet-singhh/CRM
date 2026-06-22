@@ -28,7 +28,7 @@ FlyCRM deploys as **two Vercel projects** from the same Git repo.
    - `SESSION_SECRET` — long random string
    - `MICROSOFT_REDIRECT_URI=https://<web>/auth/microsoft/callback`
    - `OUTLOOK_WEBHOOK_URL=https://<api-project>.vercel.app` (no trailing slash)
-7. Deploy and note the API URL (e.g. `https://fly-crm-api.vercel.app`).
+7. Deploy and note the API URL (e.g. `https://crm-fly1.vercel.app`).
 
 ### Verify API
 
@@ -52,7 +52,7 @@ If you see **500 FUNCTION_INVOCATION_FAILED**:
 5. Edit `web/vercel.json`: replace `YOUR_API_DOMAIN` with your API hostname (no `https://`):
 
 ```json
-"destination": "https://fly-crm-api.vercel.app/api/:path*"
+"destination": "https://crm-fly1.vercel.app/api/:path*"
 ```
 
 6. Deploy web → copy web URL → set `WEB_ORIGIN` on API project → **redeploy API**
@@ -120,14 +120,19 @@ After the API is deployed, add these under **Settings → Secrets and variables 
 
 | Secret | Value |
 |--------|-------|
-| `API_BASE_URL` | Full API base URL, e.g. `https://fly-crm-api.vercel.app` (no trailing slash) |
+| `API_BASE_URL` | Full API base URL, e.g. `https://crm-fly1.vercel.app` (no trailing slash) |
 | `CRON_SECRET` | Same value as `CRON_SECRET` on the Vercel API project |
 
 ### Verify external cron
 
 1. Push to `main` (workflows only run on `main` for scheduled triggers).
-2. **Actions** → run **External cron — sync worker** and **External cron — watch renew** via **Run workflow**.
-3. Confirm green runs and `curl` exit code 0 in logs.
+2. **Settings → Secrets and variables → Actions** — confirm:
+   - `API_BASE_URL` = `https://crm-fly1.vercel.app` (not `fly-crm-api.vercel.app` — that URL does not exist)
+   - `CRON_SECRET` = identical to the Vercel API project env var
+3. **Actions** → run **External cron — sync worker** and **External cron — watch renew** via **Run workflow**.
+4. Confirm green runs; logs show `HTTP 200` and `{"ok":true}`.
+
+If a workflow fails, open the run log — the trigger step prints HTTP status and response body (401 = secret mismatch, 404 = wrong `API_BASE_URL`).
 
 Manual smoke test:
 
