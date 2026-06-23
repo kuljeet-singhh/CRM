@@ -9,6 +9,15 @@ import {
 } from '../../calendar/upsertOutlook.js';
 import type { CalendarSyncResult } from '../../calendar/types.js';
 import { daysAgo, daysAhead } from '../../calendar/types.js';
+import {
+  type CalendarToSync,
+  clearCalendarSyncToken,
+  getCalendarsToSync,
+  migrateLegacyOutlookToken,
+  OUTLOOK_DEFAULT_CALENDAR_SENTINEL,
+  saveCalendarSyncToken,
+  clearUserCalendarSyncTokens,
+} from '../../calendar/userCalendars.js';
 
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 
@@ -16,27 +25,40 @@ function isInsufficientScope(status: number): boolean {
   return status === 403;
 }
 
-function buildInitialDeltaUrl(): string {
+function buildInitialDeltaUrl(calendarId: string): string {
   const start = daysAgo(env.calendarSyncPastDays).toISOString();
   const end = daysAhead(env.calendarSyncFutureDays).toISOString();
   const select =
     'id,iCalUId,subject,bodyPreview,start,end,location,organizer,attendees,webLink,isCancelled,showAs,isAllDay';
-  return `${GRAPH}/me/calendar/events/delta?$select=${select}&$top=50&startDateTime=${encodeURIComponent(start)}&endDateTime=${encodeURIComponent(end)}`;
+  const base =
+    calendarId === OUTLOOK_DEFAULT_CALENDAR_SENTINEL
+      ? `${GRAPH}/me/calendar/events/delta`
+      : `${GRAPH}/me/calendars/${encodeURIComponent(calendarId)}/events/delta`;
+  return `${base}?$select=${select}&$top=50&startDateTime=${encodeURIComponent(start)}&endDateTime=${encodeURIComponent(end)}`;
 }
 
-async function fetchDelta(userId: string, startUrl: string) {
+async function syncOutlookCalendarForUserCalendar(
+  userId: string,
+  calendar: CalendarToSync
+): Promise<CalendarSyncResult> {
   const token = await getOutlookAccessToken(userId);
   const workspace = await ensurePersonalWorkspace(userId);
 
   let imported = 0;
   let updated = 0;
   let cancelled = 0;
-  let url: string | undefined = startUrl;
+  let url: string | undefined =
+    calendar.syncToken ?? buildInitialDeltaUrl(calendar.calendarId);
   let deltaLink: string | undefined;
 
   while (url) {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) {
+      if (res.status === 410 && calendar.syncToken) {
+        await clearCalendarSyncToken(userId, 'outlook', calendar);
+        url = buildInitialDeltaUrl(calendar.calendarId);
+        continue;
+      }
       const err = new Error(`graph_delta_${res.status}`);
       (err as Error & { status: number }).status = res.status;
       throw err;
@@ -47,13 +69,18 @@ async function fetchDelta(userId: string, startUrl: string) {
       '@odata.deltaLink'?: string;
     };
 
+    const storedCalendarId =
+      calendar.calendarId === OUTLOOK_DEFAULT_CALENDAR_SENTINEL
+        ? OUTLOOK_DEFAULT_CALENDAR_SENTINEL
+        : calendar.calendarId;
+
     for (const event of body.value ?? []) {
       if (event['@removed']) {
-        await markOutlookCalendarEventCancelled(workspace.id, event.id);
+        await markOutlookCalendarEventCancelled(workspace.id, event.id, storedCalendarId);
         cancelled++;
         continue;
       }
-      const r = await upsertOutlookCalendarEvent(workspace.id, event);
+      const r = await upsertOutlookCalendarEvent(workspace.id, event, storedCalendarId);
       if (r === 'imported') imported++;
       else if (r === 'updated') updated++;
       else if (r === 'cancelled') cancelled++;
@@ -63,7 +90,16 @@ async function fetchDelta(userId: string, startUrl: string) {
     deltaLink = body['@odata.deltaLink'] ?? deltaLink;
   }
 
-  return { imported, updated, cancelled, deltaLink };
+  if (deltaLink) {
+    await saveCalendarSyncToken(userId, 'outlook', calendar, deltaLink);
+  }
+
+  return {
+    imported,
+    updated,
+    cancelled,
+    syncTokenSaved: Boolean(deltaLink),
+  };
 }
 
 export async function syncOutlookCalendar(userId: string): Promise<CalendarSyncResult> {
@@ -76,25 +112,32 @@ export async function syncOutlookCalendar(userId: string): Promise<CalendarSyncR
   }
 
   try {
-    const startUrl = user.outlookCalendarDeltaToken ?? buildInitialDeltaUrl();
-    const { imported, updated, cancelled, deltaLink } = await fetchDelta(userId, startUrl);
+    await migrateLegacyOutlookToken(userId);
 
-    if (deltaLink) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          outlookCalendarDeltaToken: deltaLink,
-          outlookCalendarLastSyncedAt: new Date(),
-        },
-      });
+    const calendars = await getCalendarsToSync(
+      userId,
+      'outlook',
+      user.outlookCalendarDeltaToken
+    );
+    let imported = 0;
+    let updated = 0;
+    let cancelled = 0;
+    let syncTokenSaved = false;
+
+    for (const cal of calendars) {
+      const result = await syncOutlookCalendarForUserCalendar(userId, cal);
+      imported += result.imported;
+      updated += result.updated;
+      cancelled += result.cancelled;
+      if (result.syncTokenSaved) syncTokenSaved = true;
     }
 
-    return {
-      imported,
-      updated,
-      cancelled,
-      syncTokenSaved: Boolean(deltaLink),
-    };
+    await prisma.user.update({
+      where: { id: userId },
+      data: { outlookCalendarLastSyncedAt: new Date() },
+    });
+
+    return { imported, updated, cancelled, syncTokenSaved };
   } catch (err) {
     const status = (err as { status?: number }).status;
     if ((err as Error).message === 'reauth_required' || isInsufficientScope(status ?? 0)) {
@@ -122,6 +165,7 @@ export async function resetOutlookCalendarSync(userId: string, workspaceId: stri
   await prisma.calendarEvent.deleteMany({
     where: { workspaceId, provider: 'outlook' },
   });
+  await clearUserCalendarSyncTokens(userId, 'outlook');
   await prisma.user.update({
     where: { id: userId },
     data: {

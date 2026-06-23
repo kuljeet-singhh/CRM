@@ -54,6 +54,7 @@ https://crm-fly1.vercel.app/api/webhooks/gmail
 
 1. Open [APIs & Services → Library](https://console.cloud.google.com/apis/library).
 2. Search **Gmail API** → open → **Enable**.
+3. Search **Google Calendar API** → open → **Enable** (required for calendar sync).
 
 ---
 
@@ -70,6 +71,7 @@ https://crm-fly1.vercel.app/api/webhooks/gmail
    - `.../auth/userinfo.profile`
    - `https://www.googleapis.com/auth/gmail.send`
    - `https://www.googleapis.com/auth/gmail.modify`
+   - `https://www.googleapis.com/auth/calendar.events` (create/edit meetings from CRM; Phase 3)
 5. **Save and continue**.
 6. If **External** and status is **Testing**: add your Gmail address under **Test users**.
 7. Finish the wizard.
@@ -113,7 +115,7 @@ https://fly-crm-web.vercel.app/auth/google/callback
 GOOGLE_CLIENT_ID=<Client ID from step 4>
 GOOGLE_CLIENT_SECRET=<Client secret from step 4>
 GOOGLE_REDIRECT_URI=http://localhost:5173/auth/google/callback
-GOOGLE_SCOPES=openid,email,profile,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify
+GOOGLE_SCOPES=openid,email,profile,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify,https://www.googleapis.com/auth/calendar.events
 ```
 
 Restart the API after changing `.env`: `npm run dev:server` or `npm run dev:all`.
@@ -126,7 +128,7 @@ Set on the **API** project (Settings → Environment Variables → **Production*
 GOOGLE_CLIENT_ID=<same Client ID>
 GOOGLE_CLIENT_SECRET=<same Client secret>
 GOOGLE_REDIRECT_URI=https://fly-crm-web.vercel.app/auth/google/callback
-GOOGLE_SCOPES=openid,email,profile,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify
+GOOGLE_SCOPES=openid,email,profile,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify,https://www.googleapis.com/auth/calendar.events
 WEB_ORIGIN=https://fly-crm-web.vercel.app
 ```
 

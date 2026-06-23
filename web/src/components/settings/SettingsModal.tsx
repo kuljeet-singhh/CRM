@@ -25,7 +25,8 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { initiateConnect, mailApiBase } from '@/lib/provider';
 import { usePreferences } from '@/lib/preferences';
-import type { GmailSyncConfig, LinkedInImportResult, MailProvider, UserSettings } from '@/types';
+import { CalendarPickerSection } from '@/components/settings/CalendarPickerSection';
+import type { GmailSyncConfig, LinkedInImportResult, MailProvider, UserCalendarSettings, UserSettings } from '@/types';
 
 interface SettingsModalProps {
   open: boolean;
@@ -85,6 +86,8 @@ export function SettingsModal({
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [calendarSyncEnabled, setCalendarSyncEnabled] = useState(false);
+  const [calendarWriteScopeOk, setCalendarWriteScopeOk] = useState<boolean | null>(null);
+  const [userCalendars, setUserCalendars] = useState<UserCalendarSettings[]>([]);
   const [calendarToggling, setCalendarToggling] = useState(false);
 
   const timezones = useMemo(() => allTimezones(), []);
@@ -124,6 +127,8 @@ export function SettingsModal({
           setSavedLabel(settingsData.syncSelector);
           setTimezone(settingsData.timezone ?? SYSTEM_DEFAULT);
           setCalendarSyncEnabled(Boolean(settingsData.calendarSyncEnabled));
+          setCalendarWriteScopeOk(settingsData.calendarWriteScopeOk ?? null);
+          setUserCalendars(settingsData.userCalendars ?? []);
           const pending = sessionStorage.getItem('pendingLabel');
           if (pending && !settingsData.syncSelector) {
             setLabel(pending);
@@ -146,6 +151,8 @@ export function SettingsModal({
         body: JSON.stringify({ calendarSyncEnabled: enabled }),
       });
       setCalendarSyncEnabled(Boolean(data.calendarSyncEnabled));
+      setCalendarWriteScopeOk(data.calendarWriteScopeOk ?? null);
+      setUserCalendars(data.userCalendars ?? []);
       await refreshSettings();
       toast.success(enabled ? 'Calendar sync enabled.' : 'Calendar sync disabled.');
     } catch (err) {
@@ -448,19 +455,50 @@ export function SettingsModal({
 
             <Separator />
 
-            <div className="flex items-center justify-between gap-4 rounded-md border border-border/50 bg-muted/20 px-3 py-3">
-              <div className="space-y-0.5">
-                <Label htmlFor="settings-calendar-sync">Sync primary calendar</Label>
-                <p className="text-xs text-muted-foreground">
-                  Read-only import of your primary {providerName} calendar into CRM.
-                </p>
+            <div className="space-y-3 rounded-md border border-border/50 bg-muted/20 px-3 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <Label htmlFor="settings-calendar-sync">Sync calendars</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Import selected {providerName} calendars into CRM. Choose which calendars to
+                    sync below. Reconnect after a scope upgrade to create or edit meetings from the
+                    CRM.
+                  </p>
+                </div>
+                <Switch
+                  id="settings-calendar-sync"
+                  checked={calendarSyncEnabled}
+                  disabled={calendarToggling || loading}
+                  onCheckedChange={(checked) => void toggleCalendarSync(checked)}
+                />
               </div>
-              <Switch
-                id="settings-calendar-sync"
-                checked={calendarSyncEnabled}
-                disabled={calendarToggling || loading}
-                onCheckedChange={(checked) => void toggleCalendarSync(checked)}
-              />
+              {calendarSyncEnabled && calendarWriteScopeOk === false && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-950 dark:text-amber-100">
+                  <p>
+                    Calendar write access is not granted on your current connection. Reconnect{' '}
+                    {providerName} to schedule or edit meetings from the CRM.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => {
+                      sessionStorage.setItem('reopenSettings', '1');
+                      void initiateConnect(provider, '/settings');
+                    }}
+                  >
+                    Reconnect {providerName}
+                  </Button>
+                </div>
+              )}
+              {calendarSyncEnabled && (
+                <CalendarPickerSection
+                  provider={provider}
+                  enabled={calendarSyncEnabled}
+                  savedCalendars={userCalendars}
+                  onCalendarsChange={setUserCalendars}
+                />
+              )}
             </div>
 
             <Separator />

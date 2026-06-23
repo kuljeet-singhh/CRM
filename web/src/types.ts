@@ -56,6 +56,33 @@ export interface ReplyContext {
   gmailThreadId?: string;
 }
 
+export interface UserCalendarSettings {
+  id: string;
+  calendarId: string;
+  calendarName: string;
+  isPrimary: boolean;
+  syncEnabled: boolean;
+  provider: MailProvider;
+}
+
+export interface UserCalendarInput {
+  calendarId: string;
+  calendarName: string;
+  isPrimary: boolean;
+  syncEnabled: boolean;
+}
+
+export interface CalendarListItem {
+  id: string;
+  name: string;
+  isPrimary: boolean;
+  accessRole?: string;
+}
+
+export interface CalendarListResponse {
+  calendars: CalendarListItem[];
+}
+
 export interface UserSettings {
   name: string | null;
   email: string;
@@ -66,6 +93,8 @@ export interface UserSettings {
   timezone: string | null;
   calendarSyncEnabled?: boolean;
   calendarLastSyncedAt?: string | null;
+  calendarWriteScopeOk?: boolean | null;
+  userCalendars?: UserCalendarSettings[];
   watchWarning?: string;
   subscriptionWarning?: string;
 }
@@ -91,6 +120,30 @@ export interface CalendarEventItem {
   webLink: string | null;
   isCancelled: boolean;
   provider: MailProvider;
+  calendarId: string;
+  createdFromCrm: boolean;
+}
+
+export interface CreateCalendarEventRequest {
+  calendarId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  attendeeEmails: string[];
+  location?: string;
+  contactId?: string;
+}
+
+export interface UpdateCalendarEventRequest {
+  title?: string;
+  startsAt?: string;
+  endsAt?: string;
+  attendeeEmails?: string[];
+  location?: string;
+}
+
+export interface CalendarEventResponse {
+  event: CalendarEventItem;
 }
 
 export interface CalendarSyncResult {

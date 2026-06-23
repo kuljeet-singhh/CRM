@@ -6,6 +6,7 @@ import { isOutlookPushEnabled } from '../env.js';
 import { sendOutlookMessage } from './send.js';
 import { manualOutlookSync } from './sync.js';
 import { outlookCalendarRouter } from './calendar/routes.js';
+import { listOutlookCalendars } from './calendar/list.js';
 
 export const outlookRouter = Router();
 outlookRouter.use(requireAuth);
@@ -20,6 +21,24 @@ outlookRouter.get('/sync-config', (_req: AuthedRequest, res) => {
     mailSyncIntervalMs: MAIL_SYNC_INTERVAL_MS,
     uiRefreshIntervalMs: UI_REFRESH_INTERVAL_MS,
   });
+});
+
+outlookRouter.get('/calendars', async (req: AuthedRequest, res) => {
+  try {
+    const result = await listOutlookCalendars(req.userId!);
+    if ('error' in result) {
+      res.status(403).json({ error: result.error });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    if ((err as Error).message === 'reauth_required') {
+      res.status(401).json({ error: 'reauth_required' });
+      return;
+    }
+    console.error('[outlook/calendars]', err);
+    res.status(500).json({ error: 'list_failed' });
+  }
 });
 
 outlookRouter.get('/profile', async (req: AuthedRequest, res) => {

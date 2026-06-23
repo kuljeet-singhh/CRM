@@ -94,6 +94,7 @@ model User {
   crmLabels     CrmLabel[]
   syncJobs      SyncJob[]
   refreshTokens RefreshToken[]
+  userCalendars UserCalendar[]
 }
 
 model RefreshToken {
@@ -149,6 +150,7 @@ model Contact {
 
   workspace  Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   recipients EmailMessageRecipient[]
+  calendarEventContacts CalendarEventContact[]
 
   @@unique([workspaceId, email])
   @@unique([workspaceId, linkedinUrl])
@@ -210,6 +212,7 @@ model CalendarEvent {
   id               String           @id @default(cuid())
   workspaceId      String
   provider         CalendarProvider
+  calendarId       String           @default("primary")
   googleEventId    String?
   outlookEventId   String?
   icalUid          String?
@@ -226,16 +229,47 @@ model CalendarEvent {
   attendees        Json?
   htmlLink         String?
   webLink          String?
+  createdFromCrm   Boolean          @default(false)
   lastSyncedAt     DateTime         @default(now())
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace             Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  calendarEventContacts CalendarEventContact[]
 
-  @@unique([workspaceId, googleEventId])
-  @@unique([workspaceId, outlookEventId])
+  @@unique([workspaceId, calendarId, googleEventId])
+  @@unique([workspaceId, calendarId, outlookEventId])
   @@index([workspaceId, startsAt])
   @@index([workspaceId, organizerEmail])
+}
+
+model UserCalendar {
+  id           String           @id @default(cuid())
+  userId       String
+  provider     CalendarProvider
+  calendarId   String
+  calendarName String
+  isPrimary    Boolean          @default(false)
+  syncEnabled  Boolean          @default(true)
+  syncToken    String?          @db.Text
+  lastSyncedAt DateTime?
+  createdAt    DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, calendarId])
+  @@index([userId, syncEnabled])
+}
+
+model CalendarEventContact {
+  id              String @id @default(cuid())
+  calendarEventId String
+  contactId       String
+
+  calendarEvent CalendarEvent @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
+  contact       Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarEventId, contactId])
 }
 
 model SyncJob {

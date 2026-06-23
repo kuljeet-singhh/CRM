@@ -31,9 +31,11 @@ export const env = {
   googleClientId: required('GOOGLE_CLIENT_ID'),
   googleClientSecret: required('GOOGLE_CLIENT_SECRET'),
   googleRedirectUri: required('GOOGLE_REDIRECT_URI'),
+  googleCalendarWriteScope:
+    'https://www.googleapis.com/auth/calendar.events' as const,
   googleScopes: optional(
     'GOOGLE_SCOPES',
-    'openid,email,profile,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify,https://www.googleapis.com/auth/calendar.readonly'
+    'openid,email,profile,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify,https://www.googleapis.com/auth/calendar.events'
   )
     .split(',')
     .map((s) => s.trim()),
@@ -46,9 +48,10 @@ export const env = {
   microsoftClientSecret: optional('MICROSOFT_CLIENT_SECRET'),
   microsoftRedirectUri: optional('MICROSOFT_REDIRECT_URI'),
   microsoftTenantId: optional('MICROSOFT_TENANT_ID', 'common'),
+  outlookCalendarWriteScope: 'Calendars.ReadWrite' as const,
   microsoftScopes: optional(
     'MICROSOFT_SCOPES',
-    'openid profile email offline_access User.Read Mail.ReadWrite Mail.Send Calendars.Read'
+    'openid profile email offline_access User.Read Mail.ReadWrite Mail.Send Calendars.ReadWrite'
   ).split(' '),
   calendarSyncPastDays: parseInt(optional('CALENDAR_SYNC_PAST_DAYS', '90'), 10),
   calendarSyncFutureDays: parseInt(optional('CALENDAR_SYNC_FUTURE_DAYS', '365'), 10),

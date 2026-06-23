@@ -7,6 +7,7 @@
 
 - **[GOOGLE_WEBHOOK_GUIDE.md](./GOOGLE_WEBHOOK_GUIDE.md)** — webhook setup, testing, troubleshooting (operational)
 - **[PROJECT_GUIDE.md](./PROJECT_GUIDE.md)** — onboarding and architecture overview
+- **[CALENDAR_INTEGRATION.md](./CALENDAR_INTEGRATION.md)** — Google/Outlook calendar sync (planned; see phase docs)
 
 ## Table of contents
 
@@ -50,6 +51,7 @@ FlyConnector is a lightweight CRM for email relationship management.
 | Contacts | List, search, thread timeline per contact |
 | Settings | Sync label/folder, timezone, create label/folder, reset sync, Apollo key |
 | Apollo | Import contacts from Apollo.io API into workspace |
+| Calendar (planned) | Read-only primary calendar sync — [CALENDAR_INTEGRATION.md](./CALENDAR_INTEGRATION.md) |
 
 ---
 

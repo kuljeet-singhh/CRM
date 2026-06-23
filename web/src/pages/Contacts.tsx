@@ -4,11 +4,15 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Users, Search, Mail, Calendar, ExternalLink } from 'lucide-react';
+import { Users, Search, Mail, Calendar, ExternalLink, CalendarPlus } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useFormatters } from '@/lib/preferences';
 import type { CrmContact, ContactSource } from '@/types';
 import { ContactUpcomingMeetings } from '@/components/calendar/ContactUpcomingMeetings';
+import {
+  MeetingSchedulerModal,
+  type SchedulerContact,
+} from '@/components/calendar/MeetingSchedulerModal';
 import { usePreferences } from '@/lib/preferences';
 
 function sourceLabel(source: ContactSource): string {
@@ -45,8 +49,22 @@ export default function Contacts() {
   const { formatRelativeTime } = useFormatters();
   const { settings } = usePreferences();
   const calendarSyncEnabled = Boolean(settings?.calendarSyncEnabled);
+  const canSchedule =
+    calendarSyncEnabled && settings?.calendarWriteScopeOk !== false;
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [schedulerOpen, setSchedulerOpen] = useState(false);
+  const [schedulerContact, setSchedulerContact] = useState<SchedulerContact | null>(null);
+
+  function openScheduler(contact: CrmContact) {
+    if (!contact.email) return;
+    setSchedulerContact({
+      id: contact.id,
+      name: contact.name,
+      email: contact.email,
+    });
+    setSchedulerOpen(true);
+  }
 
   const contactsQuery = useQuery({
     queryKey: ['contacts', search],
@@ -192,7 +210,20 @@ export default function Contacts() {
                 <ContactUpcomingMeetings
                   contactId={contact.id}
                   enabled={calendarSyncEnabled && Boolean(contact.email)}
+                  onSchedule={canSchedule ? () => openScheduler(contact) : undefined}
                 />
+              )}
+
+              {contact.email && canSchedule && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => openScheduler(contact)}
+                >
+                  <CalendarPlus className="h-4 w-4 mr-2" />
+                  Schedule meeting
+                </Button>
               )}
 
               <div className="flex items-center gap-2 pt-2 border-t border-border/30">
@@ -207,6 +238,13 @@ export default function Contacts() {
           </Card>
         ))}
       </div>
+
+      <MeetingSchedulerModal
+        open={schedulerOpen}
+        onOpenChange={setSchedulerOpen}
+        mode="create"
+        contact={schedulerContact ?? undefined}
+      />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { CalendarProvider, Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
+import { linkCalendarEventContacts } from './linkContacts.js';
 import type { CalendarAttendee } from './types.js';
 import { normalizeEmail } from './types.js';
 
@@ -20,6 +21,7 @@ export interface OutlookCalendarEventPayload {
     status?: { response?: string };
   }>;
   webLink?: string;
+  onlineMeeting?: { joinUrl?: string };
 }
 
 export function mapOutlookAttendees(
@@ -41,7 +43,9 @@ export function mapOutlookAttendees(
 
 export async function upsertOutlookCalendarEvent(
   workspaceId: string,
-  event: OutlookCalendarEventPayload
+  event: OutlookCalendarEventPayload,
+  calendarId: string,
+  options?: { createdFromCrm?: boolean }
 ): Promise<'imported' | 'updated' | 'cancelled' | 'skipped'> {
   const outlookEventId = event.id;
   if (!outlookEventId) return 'skipped';
@@ -55,6 +59,7 @@ export async function upsertOutlookCalendarEvent(
 
   const data = {
     provider: CalendarProvider.outlook,
+    calendarId,
     googleEventId: null,
     outlookEventId,
     icalUid: event.iCalUId ?? null,
@@ -70,29 +75,45 @@ export async function upsertOutlookCalendarEvent(
     organizerEmail,
     attendees: attendees.length ? (attendees as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
     htmlLink: null,
-    webLink: event.webLink ?? null,
+    webLink: event.onlineMeeting?.joinUrl ?? event.webLink ?? null,
     lastSyncedAt: now,
   };
 
   const existing = await prisma.calendarEvent.findFirst({
-    where: { workspaceId, outlookEventId },
+    where: { workspaceId, calendarId, outlookEventId },
   });
 
+  const dataWithCrm = {
+    ...data,
+    createdFromCrm: options?.createdFromCrm ?? existing?.createdFromCrm ?? false,
+  };
+
+  let eventId: string;
+  let result: 'imported' | 'updated' | 'cancelled';
+
   if (existing) {
-    await prisma.calendarEvent.update({ where: { id: existing.id }, data });
-    return cancelled ? 'cancelled' : 'updated';
+    await prisma.calendarEvent.update({ where: { id: existing.id }, data: dataWithCrm });
+    eventId = existing.id;
+    result = cancelled ? 'cancelled' : 'updated';
+  } else {
+    const created = await prisma.calendarEvent.create({
+      data: { workspaceId, ...dataWithCrm },
+    });
+    eventId = created.id;
+    result = cancelled ? 'cancelled' : 'imported';
   }
 
-  await prisma.calendarEvent.create({ data: { workspaceId, ...data } });
-  return cancelled ? 'cancelled' : 'imported';
+  await linkCalendarEventContacts(workspaceId, eventId, organizerEmail, attendees);
+  return result;
 }
 
 export async function markOutlookCalendarEventCancelled(
   workspaceId: string,
-  outlookEventId: string
+  outlookEventId: string,
+  calendarId: string
 ): Promise<void> {
   await prisma.calendarEvent.updateMany({
-    where: { workspaceId, outlookEventId },
+    where: { workspaceId, calendarId, outlookEventId },
     data: { isCancelled: true, lastSyncedAt: new Date() },
   });
 }

@@ -14,6 +14,18 @@ import { probeGoogleCalendarScope } from '../gmail/calendar/sync.js';
 import { runGoogleCalendarSyncForUser } from '../gmail/calendar/syncRunner.js';
 import { probeOutlookCalendarScope } from '../outlook/calendar/sync.js';
 import { runOutlookCalendarSyncForUser } from '../outlook/calendar/syncRunner.js';
+import {
+  probeGoogleCalendarWriteScope,
+  probeOutlookCalendarWriteScope,
+} from '../calendar/scopes.js';
+import type { UserCalendarInput } from '../calendar/types.js';
+import {
+  ensureDefaultUserCalendar,
+  loadUserCalendars,
+  mailProviderToCalendarProvider,
+  syncUserCalendars,
+  validateUserCalendarInputs,
+} from '../calendar/userCalendars.js';
 
 export const settingsRouter = Router();
 settingsRouter.use(requireAuth);
@@ -35,7 +47,12 @@ function settingsPayload(
     googleRefreshToken: string | null;
     outlookRefreshToken: string | null;
   },
-  extras?: { watchWarning?: string; subscriptionWarning?: string }
+  extras?: {
+    watchWarning?: string;
+    subscriptionWarning?: string;
+    calendarWriteScopeOk?: boolean | null;
+    userCalendars?: Awaited<ReturnType<typeof loadUserCalendars>>;
+  }
 ) {
   const mailProvider = deriveMailProvider(user as Parameters<typeof deriveMailProvider>[0]);
   const calendarLastSyncedAt =
@@ -56,8 +73,45 @@ function settingsPayload(
     timezone: user.timezone,
     calendarSyncEnabled: user.calendarSyncEnabled,
     calendarLastSyncedAt,
+    calendarWriteScopeOk: extras?.calendarWriteScopeOk ?? null,
+    userCalendars: extras?.userCalendars ?? [],
     ...extras,
   };
+}
+
+async function resolveCalendarWriteScopeOk(
+  userId: string,
+  user: {
+    calendarSyncEnabled: boolean;
+    googleRefreshToken: string | null;
+    outlookRefreshToken: string | null;
+    authProvider: string;
+    gmailSyncLabel: string | null;
+    outlookSyncFolder: string | null;
+  }
+): Promise<boolean | null> {
+  if (!user.calendarSyncEnabled) return null;
+
+  const mailProvider = deriveMailProvider(user as Parameters<typeof deriveMailProvider>[0]);
+  if (mailProvider === 'gmail' && user.googleRefreshToken) {
+    return probeGoogleCalendarWriteScope(userId);
+  }
+  if (mailProvider === 'outlook' && user.outlookRefreshToken) {
+    return probeOutlookCalendarWriteScope(userId);
+  }
+  return null;
+}
+
+async function settingsResponse(
+  userId: string,
+  user: Parameters<typeof settingsPayload>[0],
+  extras?: Parameters<typeof settingsPayload>[1]
+) {
+  const [calendarWriteScopeOk, userCalendars] = await Promise.all([
+    resolveCalendarWriteScopeOk(userId, user),
+    loadUserCalendars(userId),
+  ]);
+  return settingsPayload(user, { ...extras, calendarWriteScopeOk, userCalendars });
 }
 
 settingsRouter.get('/', async (req: AuthedRequest, res) => {
@@ -67,7 +121,11 @@ settingsRouter.get('/', async (req: AuthedRequest, res) => {
     return;
   }
 
-  res.json(settingsPayload(user));
+  if (user.calendarSyncEnabled) {
+    await ensureDefaultUserCalendar(req.userId!, deriveMailProvider(user));
+  }
+
+  res.json(await settingsResponse(req.userId!, user));
 });
 
 settingsRouter.put('/', async (req: AuthedRequest, res) => {
@@ -77,7 +135,7 @@ settingsRouter.put('/', async (req: AuthedRequest, res) => {
     return;
   }
 
-  const { syncSelector, gmailSyncLabel, outlookSyncFolder, timezone, name, calendarSyncEnabled } =
+  const { syncSelector, gmailSyncLabel, outlookSyncFolder, timezone, name, calendarSyncEnabled, calendars } =
     req.body as {
     syncSelector?: string;
     gmailSyncLabel?: string;
@@ -85,6 +143,7 @@ settingsRouter.put('/', async (req: AuthedRequest, res) => {
     timezone?: string;
     name?: string | null;
     calendarSyncEnabled?: boolean;
+    calendars?: UserCalendarInput[];
   };
 
   const data: Record<string, unknown> = {};
@@ -220,6 +279,25 @@ settingsRouter.put('/', async (req: AuthedRequest, res) => {
     data.calendarSyncEnabled = calendarSyncEnabled;
   }
 
+  if (calendars !== undefined) {
+    const mailProvider = deriveMailProvider(user);
+    const calendarProvider = mailProviderToCalendarProvider(mailProvider);
+    if (!calendarProvider) {
+      res.status(400).json({ error: 'no_mail_provider' });
+      return;
+    }
+    if (!Array.isArray(calendars)) {
+      res.status(400).json({ error: 'invalid_calendars' });
+      return;
+    }
+    const validationError = validateUserCalendarInputs(calendars);
+    if (validationError) {
+      res.status(400).json({ error: validationError });
+      return;
+    }
+    await syncUserCalendars(req.userId!, calendarProvider, calendars);
+  }
+
   const updated = await prisma.user.update({
     where: { id: req.userId! },
     data,
@@ -227,6 +305,7 @@ settingsRouter.put('/', async (req: AuthedRequest, res) => {
 
   if (calendarSyncEnabled === true && !wasCalendarEnabled) {
     const provider = deriveMailProvider(updated);
+    await ensureDefaultUserCalendar(req.userId!, provider);
     if (provider === 'gmail') {
       void runGoogleCalendarSyncForUser(req.userId!, 'settings');
     } else if (provider === 'outlook') {
@@ -234,5 +313,5 @@ settingsRouter.put('/', async (req: AuthedRequest, res) => {
     }
   }
 
-  res.json(settingsPayload(updated, { watchWarning, subscriptionWarning }));
+  res.json(await settingsResponse(req.userId!, updated, { watchWarning, subscriptionWarning }));
 });

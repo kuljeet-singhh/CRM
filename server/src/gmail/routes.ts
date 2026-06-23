@@ -6,6 +6,7 @@ import { getAuthorizedClient } from '../auth/tokens.js';
 import { sendGmailMessage } from './send.js';
 import { manualGmailSync } from './sync.js';
 import { gmailCalendarRouter } from './calendar/routes.js';
+import { listGoogleCalendars } from './calendar/list.js';
 
 export const gmailRouter = Router();
 gmailRouter.use(requireAuth);
@@ -20,6 +21,24 @@ gmailRouter.get('/sync-config', (_req: AuthedRequest, res) => {
     mailSyncIntervalMs: MAIL_SYNC_INTERVAL_MS,
     uiRefreshIntervalMs: UI_REFRESH_INTERVAL_MS,
   });
+});
+
+gmailRouter.get('/calendars', async (req: AuthedRequest, res) => {
+  try {
+    const result = await listGoogleCalendars(req.userId!);
+    if ('error' in result) {
+      res.status(403).json({ error: result.error });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    if ((err as Error).message === 'reauth_required') {
+      res.status(401).json({ error: 'reauth_required' });
+      return;
+    }
+    console.error('[gmail/calendars]', err);
+    res.status(500).json({ error: 'list_failed' });
+  }
 });
 
 gmailRouter.get('/profile', async (req: AuthedRequest, res) => {
