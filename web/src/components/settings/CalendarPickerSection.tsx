@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { api, ApiError } from '@/lib/api';
 import { mailApiBase } from '@/lib/provider';
 import { usePreferences } from '@/lib/preferences';
+import { isCalendarWritable } from '@/lib/calendarAccess';
 import type {
   CalendarListItem,
   CalendarListResponse,
@@ -14,12 +15,6 @@ import type {
   UserCalendarSettings,
   UserSettings,
 } from '@/types';
-
-export function isCalendarWritable(accessRole?: string): boolean {
-  if (!accessRole) return true;
-  const role = accessRole.toLowerCase();
-  return role !== 'reader' && role !== 'freebusyreader';
-}
 
 const GMAIL_PRIMARY_CALENDAR: CalendarListItem = {
   id: 'primary',

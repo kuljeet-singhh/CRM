@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Users, Search, Mail, Calendar, ExternalLink, CalendarPlus } from 'lucide-react';
+import { Users, Search, Mail, Calendar, ExternalLink, CalendarPlus, ScanLine } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useFormatters } from '@/lib/preferences';
 import type { CrmContact, ContactSource } from '@/types';
@@ -13,11 +13,13 @@ import {
   MeetingSchedulerModal,
   type SchedulerContact,
 } from '@/components/calendar/MeetingSchedulerModal';
+import { BusinessCardScanModal } from '@/components/ocr/BusinessCardScanModal';
 import { usePreferences } from '@/lib/preferences';
 
 function sourceLabel(source: ContactSource): string {
   if (source === 'apollo') return 'Apollo';
   if (source === 'linkedin_csv') return 'LinkedIn';
+  if (source === 'ocr_card') return 'OCR';
   if (source === 'logged_email') return 'Email';
   return 'Manual';
 }
@@ -25,6 +27,7 @@ function sourceLabel(source: ContactSource): string {
 function sourceBadgeVariant(source: ContactSource): 'default' | 'secondary' | 'outline' {
   if (source === 'apollo') return 'default';
   if (source === 'linkedin_csv') return 'default';
+  if (source === 'ocr_card') return 'default';
   if (source === 'logged_email') return 'secondary';
   return 'outline';
 }
@@ -55,6 +58,7 @@ export default function Contacts() {
   const [search, setSearch] = useState('');
   const [schedulerOpen, setSchedulerOpen] = useState(false);
   const [schedulerContact, setSchedulerContact] = useState<SchedulerContact | null>(null);
+  const [businessCardOpen, setBusinessCardOpen] = useState(false);
 
   function openScheduler(contact: CrmContact) {
     if (!contact.email) return;
@@ -81,8 +85,9 @@ export default function Contacts() {
     const list = contacts ?? [];
     const apollo = list.filter((c) => c.createdFrom === 'apollo').length;
     const linkedin = list.filter((c) => c.createdFrom === 'linkedin_csv').length;
+    const ocr = list.filter((c) => c.createdFrom === 'ocr_card').length;
     const email = list.filter((c) => c.createdFrom === 'logged_email').length;
-    return { total: list.length, apollo, linkedin, email };
+    return { total: list.length, apollo, linkedin, ocr, email };
   }, [contacts]);
 
   function runSearch() {
@@ -98,9 +103,14 @@ export default function Contacts() {
             {stats.total} contact{stats.total === 1 ? '' : 's'}
             {stats.apollo > 0 ? ` · ${stats.apollo} from Apollo` : ''}
             {stats.linkedin > 0 ? ` · ${stats.linkedin} from LinkedIn` : ''}
+            {stats.ocr > 0 ? ` · ${stats.ocr} from OCR` : ''}
             {stats.email > 0 ? ` · ${stats.email} from email` : ''}
           </p>
         </div>
+        <Button variant="outline" onClick={() => setBusinessCardOpen(true)}>
+          <ScanLine className="h-4 w-4 mr-2" />
+          Scan card
+        </Button>
       </div>
 
       <Card className="bg-gradient-surface border-border/50">
@@ -142,8 +152,8 @@ export default function Contacts() {
             <Users className="h-10 w-10 mx-auto text-muted-foreground" />
             <p className="font-medium">No contacts yet</p>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Import from Apollo or upload LinkedIn Connections.csv in Settings, or sync email in
-              Message Center to create contacts automatically.
+              Import from Apollo or upload LinkedIn Connections.csv in Settings, scan a business
+              card, or sync email in Message Center to create contacts automatically.
             </p>
           </CardContent>
         </Card>
@@ -245,6 +255,8 @@ export default function Contacts() {
         mode="create"
         contact={schedulerContact ?? undefined}
       />
+
+      <BusinessCardScanModal open={businessCardOpen} onOpenChange={setBusinessCardOpen} />
     </div>
   );
 }

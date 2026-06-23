@@ -139,7 +139,7 @@ export function SettingsModal({
         }
       })
       .finally(() => setLoading(false));
-  }, [open]);
+  }, [open, provider]);
 
   async function toggleCalendarSync(enabled: boolean) {
     setCalendarToggling(true);

@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { NavLink, useLocation } from "react-router-dom"
 import {
   BarChart3,
@@ -8,6 +9,7 @@ import {
   Mail,
   CalendarDays,
   FileText,
+  FileImage,
   Settings,
   Zap,
   PlusCircle
@@ -25,6 +27,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
+import { ImageToTextModal } from "@/components/ocr/ImageToTextModal"
 
 const mainItems = [
   { title: "Dashboard", url: "/dashboard", icon: BarChart3 },
@@ -48,6 +51,7 @@ export function AppSidebar() {
   const location = useLocation()
   const currentPath = location.pathname
   const isCollapsed = state === "collapsed"
+  const [imageToTextOpen, setImageToTextOpen] = useState(false)
 
   const isActive = (path: string) => currentPath === path
   const getNavClass = (path: string) =>
@@ -56,7 +60,8 @@ export function AppSidebar() {
       : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
 
   return (
-    <Sidebar collapsible="icon">
+    <>
+      <Sidebar collapsible="icon">
       <SidebarContent className="bg-gradient-surface border-r border-border/50">
         {/* Logo/Brand */}
         <div
@@ -142,6 +147,17 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  type="button"
+                  title="Extract text"
+                  className="h-10 flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                  onClick={() => setImageToTextOpen(true)}
+                >
+                  <FileImage className="h-5 w-5" />
+                  {!isCollapsed && <span className="font-medium">Extract text</span>}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -161,6 +177,8 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </div>
       </SidebarContent>
-    </Sidebar>
+      </Sidebar>
+      <ImageToTextModal open={imageToTextOpen} onOpenChange={setImageToTextOpen} />
+    </>
   )
 }

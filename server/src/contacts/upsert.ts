@@ -172,6 +172,78 @@ export async function upsertContactFromLinkedInCsv(
   return { contact, created: false, updated: true };
 }
 
+type OcrUpsertResult =
+  | { skipped: 'no_identifier' | 'invalid_url' }
+  | { skipped?: undefined; contact: Contact; created: boolean; updated: boolean };
+
+export async function upsertContactFromOcr(
+  workspaceId: string,
+  data: {
+    name?: string | null;
+    email?: string | null;
+    company?: string | null;
+    title?: string | null;
+    linkedinUrl?: string | null;
+  }
+): Promise<OcrUpsertResult> {
+  const email = data.email?.toLowerCase().trim() || null;
+  const linkedinUrl = data.linkedinUrl ? normalizeLinkedInUrl(data.linkedinUrl) : null;
+
+  if (!email && !linkedinUrl) {
+    return { skipped: 'no_identifier' };
+  }
+
+  if (data.linkedinUrl?.trim() && !linkedinUrl) {
+    return { skipped: 'invalid_url' };
+  }
+
+  let existing: Contact | null = null;
+  if (email) {
+    existing = await prisma.contact.findUnique({
+      where: { workspaceId_email: { workspaceId, email } },
+    });
+  }
+  if (!existing && linkedinUrl) {
+    existing = await prisma.contact.findUnique({
+      where: { workspaceId_linkedinUrl: { workspaceId, linkedinUrl } },
+    });
+  }
+
+  const payload = {
+    name: data.name || null,
+    email,
+    company: data.company || null,
+    title: data.title || null,
+    linkedinUrl,
+  };
+
+  if (!existing) {
+    const contact = await prisma.contact.create({
+      data: {
+        workspaceId,
+        email: payload.email,
+        name: payload.name,
+        company: payload.company,
+        title: payload.title,
+        linkedinUrl: payload.linkedinUrl,
+        createdFrom: 'ocr_card',
+      },
+    });
+    return { contact, created: true, updated: false };
+  }
+
+  const updates = backfillContactFields(existing, payload);
+  if (Object.keys(updates).length === 0) {
+    return { contact: existing, created: false, updated: false };
+  }
+
+  const contact = await prisma.contact.update({
+    where: { id: existing.id },
+    data: updates,
+  });
+  return { contact, created: false, updated: true };
+}
+
 export async function logEmailToCrm(params: {
   workspaceId: string;
   gmailMessageId?: string;

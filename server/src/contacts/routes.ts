@@ -3,11 +3,19 @@ import express, { Router } from 'express';
 import { prisma } from '../db.js';
 import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
 import { importLinkedInCsv } from './linkedinImport.js';
+import { validateCreateContactBody, toCreateContactBody } from './parseContactBody.js';
+import { upsertContactFromOcr } from './upsert.js';
 
 export const contactsRouter = Router();
 contactsRouter.use(requireAuth);
 
-const CONTACT_SOURCES: ContactSource[] = ['manual', 'logged_email', 'apollo', 'linkedin_csv'];
+const CONTACT_SOURCES: ContactSource[] = [
+  'manual',
+  'logged_email',
+  'apollo',
+  'linkedin_csv',
+  'ocr_card',
+];
 
 function mapContactFields(c: Contact) {
   return {
@@ -43,6 +51,27 @@ contactsRouter.post(
     }
   }
 );
+
+contactsRouter.post('/', express.json(), async (req: AuthedRequest, res) => {
+  const validationError = validateCreateContactBody(req.body);
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
+
+  const body = toCreateContactBody(req.body);
+  const result = await upsertContactFromOcr(req.workspaceId!, body);
+
+  if ('skipped' in result && result.skipped) {
+    res.status(400).json({ error: result.skipped === 'invalid_url' ? 'invalid_url' : 'missing_identifier' });
+    return;
+  }
+
+  res.status(result.created ? 201 : 200).json({
+    contact: mapContactFields(result.contact),
+    created: result.created,
+  });
+});
 
 contactsRouter.get('/', async (req: AuthedRequest, res) => {
   const search = (req.query.search as string)?.trim() ?? '';

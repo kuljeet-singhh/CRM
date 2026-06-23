@@ -2,7 +2,7 @@ export type AuthProvider = 'gmail' | 'outlook' | 'credential';
 
 export type MailProvider = 'gmail' | 'outlook';
 
-export type ContactSource = 'manual' | 'logged_email' | 'apollo' | 'linkedin_csv';
+export type ContactSource = 'manual' | 'logged_email' | 'apollo' | 'linkedin_csv' | 'ocr_card';
 
 export interface Me {
   id: string;

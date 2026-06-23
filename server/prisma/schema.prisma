@@ -20,6 +20,7 @@ enum ContactSource {
   logged_email
   apollo
   linkedin_csv
+  ocr_card
 }
 
 enum EmailDirection {
