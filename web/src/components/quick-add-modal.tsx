@@ -15,9 +15,11 @@ import {
   Plus,
   ScanLine,
   FileImage,
+  Mic,
 } from "lucide-react"
 import { ImageToTextModal } from "@/components/ocr/ImageToTextModal"
 import { BusinessCardScanModal } from "@/components/ocr/BusinessCardScanModal"
+import { VoiceToTextModal } from "@/components/speech/VoiceToTextModal"
 
 interface QuickAddModalProps {
   open: boolean
@@ -27,6 +29,7 @@ interface QuickAddModalProps {
 export function QuickAddModal({ open, onOpenChange }: QuickAddModalProps) {
   const navigate = useNavigate()
   const [imageToTextOpen, setImageToTextOpen] = useState(false)
+  const [voiceToTextOpen, setVoiceToTextOpen] = useState(false)
   const [businessCardOpen, setBusinessCardOpen] = useState(false)
 
   const quickAddItems = [
@@ -46,6 +49,15 @@ export function QuickAddModal({ open, onOpenChange }: QuickAddModalProps) {
       action: () => {
         onOpenChange(false)
         setImageToTextOpen(true)
+      }
+    },
+    {
+      title: "Dictate text",
+      description: "Speak and get transcribed text",
+      icon: Mic,
+      action: () => {
+        onOpenChange(false)
+        setVoiceToTextOpen(true)
       }
     },
     {
@@ -122,6 +134,7 @@ export function QuickAddModal({ open, onOpenChange }: QuickAddModalProps) {
       </Dialog>
 
       <ImageToTextModal open={imageToTextOpen} onOpenChange={setImageToTextOpen} />
+      <VoiceToTextModal open={voiceToTextOpen} onOpenChange={setVoiceToTextOpen} />
       <BusinessCardScanModal open={businessCardOpen} onOpenChange={setBusinessCardOpen} />
     </>
   )

@@ -10,6 +10,7 @@ import {
   CalendarDays,
   FileText,
   FileImage,
+  Mic,
   Settings,
   Zap,
   PlusCircle
@@ -28,6 +29,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { ImageToTextModal } from "@/components/ocr/ImageToTextModal"
+import { VoiceToTextModal } from "@/components/speech/VoiceToTextModal"
 
 const mainItems = [
   { title: "Dashboard", url: "/dashboard", icon: BarChart3 },
@@ -52,6 +54,7 @@ export function AppSidebar() {
   const currentPath = location.pathname
   const isCollapsed = state === "collapsed"
   const [imageToTextOpen, setImageToTextOpen] = useState(false)
+  const [voiceToTextOpen, setVoiceToTextOpen] = useState(false)
 
   const isActive = (path: string) => currentPath === path
   const getNavClass = (path: string) =>
@@ -158,6 +161,17 @@ export function AppSidebar() {
                   {!isCollapsed && <span className="font-medium">Extract text</span>}
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  type="button"
+                  title="Dictate text"
+                  className="h-10 flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                  onClick={() => setVoiceToTextOpen(true)}
+                >
+                  <Mic className="h-5 w-5" />
+                  {!isCollapsed && <span className="font-medium">Dictate text</span>}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -179,6 +193,7 @@ export function AppSidebar() {
       </SidebarContent>
       </Sidebar>
       <ImageToTextModal open={imageToTextOpen} onOpenChange={setImageToTextOpen} />
+      <VoiceToTextModal open={voiceToTextOpen} onOpenChange={setVoiceToTextOpen} />
     </>
   )
 }
