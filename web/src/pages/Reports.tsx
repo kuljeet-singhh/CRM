@@ -1,327 +1,372 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { 
-  FileText, 
-  Download, 
-  TrendingUp, 
-  TrendingDown,
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DateRangePicker } from '@/components/reports/DateRangePicker';
+import { ReportKpiCard } from '@/components/reports/ReportKpiCard';
+import { ContactGrowthChart } from '@/components/reports/ContactGrowthChart';
+import { EmailActivityChart } from '@/components/reports/EmailActivityChart';
+import { ContactsBySourceChart } from '@/components/reports/ContactsBySourceChart';
+import {
+  downloadReportExport,
+  useReportCalendar,
+  useReportEmail,
+  useReportEngagement,
+  useReportSummary,
+  useReportsDateRangeFromFilter,
+} from '@/hooks/useReports';
+import { useFormatters } from '@/lib/preferences';
+import type { ExportFormat, ExportType, ReportDateRange } from '@/types/reports';
+import {
+  FileText,
+  Download,
   BarChart3,
   PieChart,
   Calendar,
-  Target,
   Users,
-  DollarSign,
+  Mail,
   Activity,
-  Filter
-} from "lucide-react"
+  CalendarDays,
+} from 'lucide-react';
+import { ApiError } from '@/lib/api';
 
-const salesMetrics = [
-  { period: "This Month", revenue: "$486K", deals: 23, growth: "+12.5%", trend: "up" },
-  { period: "Last Month", revenue: "$432K", deals: 19, growth: "+8.2%", trend: "up" },
-  { period: "Q4 2023", revenue: "$1.2M", deals: 67, growth: "+15.3%", trend: "up" },
-  { period: "Q3 2023", revenue: "$1.05M", deals: 61, growth: "-2.1%", trend: "down" }
-]
-
-const teamPerformance = [
-  { name: "Sarah Wilson", deals: 12, revenue: "$450K", target: 85, conversion: 68 },
-  { name: "Mike Johnson", deals: 8, revenue: "$320K", target: 75, conversion: 62 },
-  { name: "Emily Chen", deals: 15, revenue: "$380K", target: 92, conversion: 71 },
-  { name: "David Park", deals: 10, revenue: "$290K", target: 65, conversion: 59 }
-]
-
-const recentReports = [
-  {
-    id: 1,
-    name: "Q4 Sales Performance",
-    type: "Quarterly",
-    generated: "2024-01-15",
-    status: "Completed",
-    size: "2.4 MB"
-  },
-  {
-    id: 2,
-    name: "Pipeline Analysis December",
-    type: "Monthly",
-    generated: "2024-01-01",
-    status: "Completed",
-    size: "1.8 MB"
-  },
-  {
-    id: 3,
-    name: "Team Performance Review",
-    type: "Custom",
-    generated: "2024-01-10",
-    status: "Completed",
-    size: "3.1 MB"
-  },
-  {
-    id: 4,
-    name: "Customer Acquisition Report",
-    type: "Monthly",
-    generated: "2024-01-08",
-    status: "Completed",
-    size: "1.5 MB"
-  }
-]
+const VALID_TABS = ['overview', 'activity', 'contacts', 'export'] as const;
+type ReportTab = (typeof VALID_TABS)[number];
 
 export default function Reports() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filter = searchParams.get('filter');
+  const tabParam = searchParams.get('tab');
+  const filterRange = useReportsDateRangeFromFilter(filter);
+  const [dateRange, setDateRange] = useState<ReportDateRange>(filterRange);
+  const [exporting, setExporting] = useState<string | null>(null);
+  const { formatRelativeTime } = useFormatters();
+
+  const activeTab: ReportTab = useMemo(() => {
+    if (tabParam && VALID_TABS.includes(tabParam as ReportTab)) {
+      return tabParam as ReportTab;
+    }
+    if (filter === 'close-rate' || filter === 'revenue' || filter === 'contacts') {
+      return 'overview';
+    }
+    return 'overview';
+  }, [tabParam, filter]);
+
+  useEffect(() => {
+    if (filter) {
+      setDateRange(filterRange);
+    }
+  }, [filter, filterRange]);
+
+  const summaryQuery = useReportSummary(dateRange);
+  const emailQuery = useReportEmail(dateRange);
+  const calendarQuery = useReportCalendar(dateRange);
+  const engagementQuery = useReportEngagement(dateRange, 10);
+
+  const summary = summaryQuery.data;
+  const loading = summaryQuery.isLoading;
+
+  const handleTabChange = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', value);
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleExport = async (type: ExportType, format: ExportFormat) => {
+    const key = `${type}-${format}`;
+    setExporting(key);
+    try {
+      await downloadReportExport(dateRange, type, format);
+      toast.success('Report downloaded');
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Export failed';
+      toast.error(message);
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold gradient-text">Reports</h1>
-          <p className="text-muted-foreground">Analyze your sales performance and trends</p>
+          <p className="text-muted-foreground">
+            Engagement metrics from contacts, email, and calendar
+          </p>
         </div>
-        <Button className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-accent">
-          <FileText className="h-4 w-4 mr-2" />
-          Generate Report
-        </Button>
+        <div className="flex items-center gap-3">
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          <Button
+            className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-accent"
+            disabled={exporting === 'summary-csv'}
+            onClick={() => handleExport('summary', 'csv')}
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Generate Report
+          </Button>
+        </div>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:w-96">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4 lg:w-[28rem]">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="sales">Sales</TabsTrigger>
-          <TabsTrigger value="team">Team</TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="contacts">Contacts</TabsTrigger>
+          <TabsTrigger value="export">Export</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {/* Key Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <ReportKpiCard
+              title="Total Contacts"
+              icon={Users}
+              kpi={summary?.kpis.totalContacts}
+              loading={loading}
+              showChange={false}
+              description="all time"
+            />
+            <ReportKpiCard
+              title="New Contacts"
+              icon={Users}
+              kpi={summary?.kpis.newContacts}
+              loading={loading}
+            />
+            <ReportKpiCard
+              title="Emails Sent"
+              icon={Mail}
+              kpi={summary?.kpis.emailsSent}
+              loading={loading}
+            />
+            <ReportKpiCard
+              title="Emails Received"
+              icon={Mail}
+              kpi={summary?.kpis.emailsReceived}
+              loading={loading}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="bg-gradient-surface border-border/50">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  Contact Growth
+                </CardTitle>
+                <CardDescription>New contacts per day in selected period</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">$1.8M</div>
-                <p className="text-xs text-success flex items-center gap-1">
-                  <TrendingUp className="h-3 w-3" />
-                  +12.5% from last quarter
-                </p>
+                <ContactGrowthChart data={summary?.series.contactGrowth ?? []} />
               </CardContent>
             </Card>
 
             <Card className="bg-gradient-surface border-border/50">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Deals</CardTitle>
-                <Target className="h-4 w-4 text-muted-foreground" />
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PieChart className="h-5 w-5 text-primary" />
+                  Contacts by Source
+                </CardTitle>
+                <CardDescription>All contacts in workspace</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">147</div>
-                <p className="text-xs text-muted-foreground">$2.4M pipeline value</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-surface border-border/50">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">68%</div>
-                <p className="text-xs text-success">+5% from last month</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-surface border-border/50">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">New Contacts</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">89</div>
-                <p className="text-xs text-muted-foreground">This month</p>
+                <ContactsBySourceChart data={summary?.series.contactsBySource ?? []} />
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
 
-          {/* Chart Placeholder */}
+        <TabsContent value="activity" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <ReportKpiCard
+              title="Emails Sent"
+              icon={Mail}
+              kpi={summary?.kpis.emailsSent}
+              loading={loading}
+            />
+            <ReportKpiCard
+              title="Emails Received"
+              icon={Mail}
+              kpi={summary?.kpis.emailsReceived}
+              loading={loading}
+            />
+            <ReportKpiCard
+              title="Meetings Scheduled"
+              icon={CalendarDays}
+              kpi={summary?.kpis.meetingsScheduled}
+              loading={loading}
+            />
+            <ReportKpiCard
+              title="CRM Meetings Created"
+              icon={Calendar}
+              kpi={summary?.kpis.crmMeetingsCreated}
+              loading={loading}
+            />
+          </div>
+
           <Card className="bg-gradient-surface border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-primary" />
-                Revenue Trend
+                <Activity className="h-5 w-5 text-primary" />
+                Email Activity
               </CardTitle>
-              <CardDescription>
-                Monthly revenue performance over the last 12 months
-              </CardDescription>
+              <CardDescription>Sent vs received per day</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-64 flex items-center justify-center bg-muted/20 rounded-lg">
-                <div className="text-center">
-                  <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-muted-foreground">Chart visualization would appear here</p>
+              <EmailActivityChart
+                data={emailQuery.data?.activity ?? summary?.series.emailActivity ?? []}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-surface border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-5 w-5 text-primary" />
+                Calendar Summary
+              </CardTitle>
+              <CardDescription>Meetings in selected period</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {calendarQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : calendarQuery.data ? (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  {[
+                    { label: 'Scheduled', value: calendarQuery.data.meetingsScheduled },
+                    { label: 'Held', value: calendarQuery.data.meetingsHeld },
+                    { label: 'Upcoming', value: calendarQuery.data.upcomingMeetings },
+                    { label: 'CRM created', value: calendarQuery.data.crmCreated },
+                    { label: 'Synced', value: calendarQuery.data.syncedFromProvider },
+                  ].map((item) => (
+                    <div key={item.label} className="p-4 rounded-lg bg-background/50 text-center">
+                      <div className="text-2xl font-bold">{item.value}</div>
+                      <div className="text-xs text-muted-foreground">{item.label}</div>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No calendar data.</p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="sales" className="space-y-6">
-          {/* Sales Performance */}
-          <Card className="bg-gradient-surface border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                Sales Performance
-              </CardTitle>
-              <CardDescription>
-                Detailed breakdown of sales metrics by period
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {salesMetrics.map((metric, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 rounded-lg bg-background/50">
-                    <div>
-                      <h4 className="font-medium">{metric.period}</h4>
-                      <p className="text-sm text-muted-foreground">{metric.deals} deals closed</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-semibold">{metric.revenue}</div>
-                      <div className={`text-sm flex items-center gap-1 ${
-                        metric.trend === "up" ? "text-success" : "text-destructive"
-                      }`}>
-                        {metric.trend === "up" ? (
-                          <TrendingUp className="h-3 w-3" />
-                        ) : (
-                          <TrendingDown className="h-3 w-3" />
-                        )}
-                        {metric.growth}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Pipeline Distribution */}
-          <Card className="bg-gradient-surface border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PieChart className="h-5 w-5 text-primary" />
-                Pipeline Distribution
-              </CardTitle>
-              <CardDescription>
-                Current deals by stage and value
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-48 flex items-center justify-center bg-muted/20 rounded-lg">
-                <div className="text-center">
-                  <PieChart className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-muted-foreground">Pipeline chart would appear here</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="team" className="space-y-6">
-          {/* Team Performance */}
+        <TabsContent value="contacts" className="space-y-6">
           <Card className="bg-gradient-surface border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-primary" />
-                Team Performance
+                Top Engaged Contacts
               </CardTitle>
-              <CardDescription>
-                Individual performance metrics and targets
-              </CardDescription>
+              <CardDescription>Most email activity in selected period</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {teamPerformance.map((member, index) => (
-                  <div key={index} className="p-4 rounded-lg bg-background/50">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <h4 className="font-medium">{member.name}</h4>
-                        <p className="text-sm text-muted-foreground">{member.deals} deals • {member.revenue}</p>
+              {engagementQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : engagementQuery.data?.contacts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No email engagement in this period.</p>
+              ) : (
+                <div className="space-y-3">
+                  {engagementQuery.data?.contacts.map((contact, index) => (
+                    <div
+                      key={contact.contactId}
+                      className="flex items-center justify-between p-4 rounded-lg bg-background/50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline">{index + 1}</Badge>
+                        <div>
+                          <h4 className="font-medium">
+                            {contact.name?.trim() || contact.email || 'Unknown'}
+                          </h4>
+                          <p className="text-sm text-muted-foreground">
+                            {contact.company || contact.email || '—'}
+                          </p>
+                        </div>
                       </div>
-                      <Badge variant={member.target >= 80 ? "default" : "secondary"}>
-                        {member.target}% of target
-                      </Badge>
+                      <div className="text-right text-sm">
+                        <div className="font-semibold">{contact.emailCount} emails</div>
+                        {contact.lastEmailAt && (
+                          <div className="text-muted-foreground">
+                            {formatRelativeTime(contact.lastEmailAt)}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Target Progress</span>
-                        <span>{member.target}%</span>
-                      </div>
-                      <Progress value={member.target} className="h-2" />
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Conversion Rate: {member.conversion}%</span>
-                        <span>Target: 100%</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-surface border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-primary" />
+                Contact Growth
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ContactGrowthChart data={summary?.series.contactGrowth ?? []} />
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="history" className="space-y-6">
-          {/* Report History */}
+        <TabsContent value="export" className="space-y-6">
           <Card className="bg-gradient-surface border-border/50">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-primary" />
-                    Report History
-                  </CardTitle>
-                  <CardDescription>
-                    Previously generated reports and analytics
-                  </CardDescription>
-                </div>
-                <Button variant="outline" className="flex items-center gap-2">
-                  <Filter className="h-4 w-4" />
-                  Filter
-                </Button>
-              </div>
+              <CardTitle className="flex items-center gap-2">
+                <Download className="h-5 w-5 text-primary" />
+                Download Reports
+              </CardTitle>
+              <CardDescription>
+                Export data for {dateRange.from} to {dateRange.to}. Sales pipeline reports
+                will be available when the Pipeline module is added.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {recentReports.map((report) => (
-                  <div key={report.id} className="flex items-center justify-between p-4 rounded-lg bg-background/50 hover:bg-muted/30 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-gradient-primary flex items-center justify-center">
-                        <FileText className="h-5 w-5 text-primary-foreground" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">{report.name}</h4>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>{report.type}</span>
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {report.generated}
-                          </div>
-                          <span>{report.size}</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">{report.status}</Badge>
-                      <Button variant="outline" size="sm" className="flex items-center gap-1">
-                        <Download className="h-3 w-3" />
-                        Download
-                      </Button>
-                    </div>
+            <CardContent className="space-y-4">
+              {(
+                [
+                  { type: 'summary' as const, label: 'Engagement summary', desc: 'KPIs and source breakdown' },
+                  { type: 'contacts' as const, label: 'Contacts list', desc: 'Contacts created in period' },
+                  { type: 'emails' as const, label: 'Email activity', desc: 'Daily sent/received counts' },
+                ] as const
+              ).map((item) => (
+                <div
+                  key={item.type}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg bg-background/50"
+                >
+                  <div>
+                    <h4 className="font-medium">{item.label}</h4>
+                    <p className="text-sm text-muted-foreground">{item.desc}</p>
                   </div>
-                ))}
-              </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={exporting === `${item.type}-csv`}
+                      onClick={() => handleExport(item.type, 'csv')}
+                    >
+                      <Download className="h-3 w-3 mr-1" />
+                      CSV
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={exporting === `${item.type}-json`}
+                      onClick={() => handleExport(item.type, 'json')}
+                    >
+                      JSON
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }
