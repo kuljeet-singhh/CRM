@@ -1,10 +1,12 @@
 import type { SyncJob } from '@prisma/client';
 import { prisma } from '../db.js';
 import { env } from '../env.js';
+import { isPrismaTransientError } from '../prismaErrors.js';
 import { handleLabelSync } from './handlers/labelSync.js';
 import { handleThreadSync } from './handlers/threadSync.js';
 
 const STUCK_MS = 60_000;
+const DB_BACKOFF_MS = 30_000;
 
 function backoffMs(attempts: number): number {
   return Math.min(60_000, 1000 * Math.pow(2, attempts));
@@ -66,6 +68,9 @@ export async function pollOnce() {
         data: { status: 'done', lastError: null },
       });
     } catch (err) {
+      if (isPrismaTransientError(err)) {
+        throw err;
+      }
       const attempts = job.attempts + 1;
       const message = err instanceof Error ? err.message : String(err);
 
@@ -90,13 +95,39 @@ export async function pollOnce() {
 }
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
+let polling = false;
+let dbBackoffUntil = 0;
+let lastDbWarnAt = 0;
+
+function schedulePoll() {
+  if (polling) return;
+  if (Date.now() < dbBackoffUntil) return;
+  polling = true;
+  pollOnce()
+    .then(() => {
+      dbBackoffUntil = 0;
+    })
+    .catch((err) => {
+      if (isPrismaTransientError(err)) {
+        dbBackoffUntil = Date.now() + DB_BACKOFF_MS;
+        const now = Date.now();
+        if (now - lastDbWarnAt >= DB_BACKOFF_MS) {
+          lastDbWarnAt = now;
+          console.warn(`[worker] database unavailable, backing off ${DB_BACKOFF_MS / 1000}s`);
+        }
+        return;
+      }
+      console.error('[worker]', err);
+    })
+    .finally(() => {
+      polling = false;
+    });
+}
 
 export function startWorker() {
   if (intervalId) return;
-  intervalId = setInterval(() => {
-    pollOnce().catch((err) => console.error('[worker]', err));
-  }, env.syncWorkerPollMs);
-  pollOnce().catch((err) => console.error('[worker]', err));
+  intervalId = setInterval(schedulePoll, env.syncWorkerPollMs);
+  schedulePoll();
 }
 
 export function stopWorker() {

@@ -1,7 +1,7 @@
-import { syncUserGmail } from './syncUserGmail.js';
+import { runGmailSyncForUser } from './syncRunner.js';
+import type { SyncUserGmailResult } from './syncUserGmail.js';
 
-export async function manualGmailSync(userId: string, workspaceId: string) {
-  const result = await syncUserGmail(userId, workspaceId);
+function mapSyncResult(result: SyncUserGmailResult) {
   if (result.error === 'no_sync_label') {
     return { messagesAdded: 0, error: 'no_sync_label' as const };
   }
@@ -13,4 +13,9 @@ export async function manualGmailSync(userId: string, workspaceId: string) {
     messagesUpdated: result.messagesRemoved,
     historyId: result.historyId,
   };
+}
+
+export async function manualGmailSync(userId: string, workspaceId: string) {
+  const result = await runGmailSyncForUser(userId, 'manual', workspaceId);
+  return mapSyncResult(result);
 }

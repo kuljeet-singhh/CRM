@@ -84,6 +84,8 @@ export function EmailInbox({ provider, onReply, onCompose, onOpenSyncSettings }:
       api<{ messages: InboxMessage[] }>(
         `/api/messages?search=${encodeURIComponent(search)}&limit=50`
       ),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
   const syncMutation = useMutation({

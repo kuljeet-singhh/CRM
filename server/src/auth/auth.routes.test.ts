@@ -122,4 +122,17 @@ describe('GET /auth/me', () => {
       name: 'Test User',
     });
   });
+
+  it('returns 503 when database is unreachable', async () => {
+    const token = signAccessToken('user-1');
+    const err = Object.assign(new Error("Can't reach database server"), { code: 'P1001' });
+    vi.mocked(prisma.user.findUnique).mockRejectedValue(err);
+
+    const res = await request(createApp())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ error: 'db_unavailable' });
+  });
 });

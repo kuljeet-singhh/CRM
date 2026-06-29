@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { google } from 'googleapis';
 import { AuthProvider } from '@prisma/client';
 import { prisma } from '../db.js';
+import { isPrismaConnectivityError } from '../prismaErrors.js';
 import { env, isMicrosoftConfigured, isOutlookPushEnabled } from '../env.js';
 import { ensureOutlookSubscription } from '../outlook/subscriptionManager.js';
 import { encrypt } from './crypto.js';
@@ -173,15 +174,24 @@ authRouter.post('/refresh', async (req, res) => {
     return;
   }
 
-  const rotated = await rotateRefreshToken(raw);
-  if (!rotated) {
-    clearRefreshCookie(res);
-    res.status(401).json({ error: 'invalid_refresh_token' });
-    return;
-  }
+  try {
+    const rotated = await rotateRefreshToken(raw);
+    if (!rotated) {
+      clearRefreshCookie(res);
+      res.status(401).json({ error: 'invalid_refresh_token' });
+      return;
+    }
 
-  setRefreshCookie(res, rotated.refreshToken);
-  res.json({ accessToken: rotated.accessToken });
+    setRefreshCookie(res, rotated.refreshToken);
+    res.json({ accessToken: rotated.accessToken });
+  } catch (err) {
+    console.error('[auth/refresh]', err);
+    if (isPrismaConnectivityError(err)) {
+      res.status(503).json({ error: 'db_unavailable' });
+      return;
+    }
+    res.status(500).json({ error: 'internal_error' });
+  }
 });
 
 authRouter.post('/logout', async (req, res) => {
@@ -264,12 +274,21 @@ authRouter.get('/me', async (req, res) => {
       res.status(401).json({ error: 'unauthorized' });
       return;
     }
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      res.status(401).json({ error: 'unauthorized' });
-      return;
+    try {
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
+      res.json({ user: toPublicUser(user) });
+    } catch (err) {
+      console.error('[auth/me]', err);
+      if (isPrismaConnectivityError(err)) {
+        res.status(503).json({ error: 'db_unavailable' });
+        return;
+      }
+      res.status(500).json({ error: 'internal_error' });
     }
-    res.json({ user: toPublicUser(user) });
     return;
   }
   res.json({ user: null });

@@ -12,7 +12,7 @@ export const gmailRouter = Router();
 gmailRouter.use(requireAuth);
 gmailRouter.use('/calendar', gmailCalendarRouter);
 
-const UI_REFRESH_INTERVAL_MS = 15_000;
+const UI_REFRESH_INTERVAL_MS = 60_000;
 const MAIL_SYNC_INTERVAL_MS = 86_400_000;
 
 gmailRouter.get('/sync-config', (_req: AuthedRequest, res) => {
@@ -74,7 +74,10 @@ gmailRouter.post('/send', async (req: AuthedRequest, res) => {
   }
 
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.userId! } });
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      include: { crmLabels: true },
+    });
     if (!user) {
       res.status(401).json({ error: 'reauth_required' });
       return;
@@ -90,6 +93,7 @@ gmailRouter.post('/send', async (req: AuthedRequest, res) => {
       body,
       inReplyTo,
       gmailThreadId,
+      crmLabelId: user.gmailSyncLabel ? (user.crmLabels[0]?.labelId ?? null) : null,
     });
     res.json(result);
   } catch (err) {

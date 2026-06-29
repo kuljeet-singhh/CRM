@@ -8,7 +8,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
 import { mailApiBase } from '@/lib/provider';
-import type { MailProvider, ReplyContext } from '@/types';
+import { useAuth } from '@/hooks/useAuth';
+import type { InboxMessage, MailProvider, ReplyContext } from '@/types';
 
 interface EmailComposeProps {
   provider: MailProvider;
@@ -17,6 +18,7 @@ interface EmailComposeProps {
 
 export function EmailCompose({ provider, initial }: EmailComposeProps) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [to, setTo] = useState(initial?.to ?? '');
   const [cc, setCc] = useState('');
   const [subject, setSubject] = useState(initial?.subject ?? '');
@@ -24,24 +26,44 @@ export function EmailCompose({ provider, initial }: EmailComposeProps) {
 
   const sendMutation = useMutation({
     mutationFn: () =>
-      api(`${mailApiBase(provider)}/send`, {
-        method: 'POST',
-        body: JSON.stringify({
-          to,
-          cc: cc || undefined,
-          subject,
-          body,
-          inReplyTo: initial?.inReplyTo,
-          gmailThreadId: initial?.gmailThreadId,
-        }),
-      }),
-    onSuccess: () => {
+      api<{ messageId: string; threadId?: string; rfcMessageId?: string }>(
+        `${mailApiBase(provider)}/send`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            to,
+            cc: cc || undefined,
+            subject,
+            body,
+            inReplyTo: initial?.inReplyTo,
+            gmailThreadId: initial?.gmailThreadId,
+          }),
+        }
+      ),
+    onSuccess: (result) => {
+      const optimistic: InboxMessage = {
+        id: `optimistic-${result.messageId}`,
+        subject,
+        preview: body.slice(0, 120),
+        from: user?.email ?? 'You',
+        email: to,
+        company: '',
+        timestamp: new Date().toISOString(),
+        direction: 'sent',
+        gmailThreadId: result.threadId ?? initial?.gmailThreadId ?? null,
+        gmailMessageId: result.messageId,
+        bodyText: body,
+        rfcMessageId: result.rfcMessageId ?? null,
+      };
+      queryClient.setQueriesData<{ messages: InboxMessage[] }>(
+        { queryKey: ['messages'] },
+        (old) => (old ? { messages: [optimistic, ...old.messages] } : { messages: [optimistic] })
+      );
       toast.success('Email sent');
       setTo('');
       setCc('');
       setSubject('');
       setBody('');
-      queryClient.invalidateQueries({ queryKey: ['messages'] });
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'reauth_required') {

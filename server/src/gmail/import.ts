@@ -1,7 +1,7 @@
 import type { gmail_v1 } from 'googleapis';
 import { prisma } from '../db.js';
 import { getAuthorizedClient } from '../auth/tokens.js';
-import { processGmailMessageForCrm } from './send.js';
+import { processGmailMessageForCrm, processGmailMessagePayload } from './send.js';
 
 export async function listLabeledMessageIds(
   gmail: gmail_v1.Gmail,
@@ -72,37 +72,36 @@ export async function importGmailThreadForCrm(params: {
   userEmail: string;
   threadId: string;
   labelId: string;
+  gmail?: gmail_v1.Gmail;
 }): Promise<number> {
-  const gmail = await getAuthorizedClient(params.userId);
+  const gmail = params.gmail ?? (await getAuthorizedClient(params.userId));
   const thread = await gmail.users.threads.get({
     userId: 'me',
     id: params.threadId,
-    format: 'minimal',
+    format: 'full',
   });
 
   const messages = thread.data.messages ?? [];
   const threadHasCrmLabel = messages.some((m) => m.labelIds?.includes(params.labelId));
   if (!threadHasCrmLabel) return 0;
 
+  const messageIds = messages.map((m) => m.id).filter(Boolean) as string[];
+  const existingRows = await prisma.emailMessage.findMany({
+    where: { workspaceId: params.workspaceId, gmailMessageId: { in: messageIds } },
+    select: { gmailMessageId: true },
+  });
+  const existingIds = new Set(existingRows.map((r) => r.gmailMessageId));
+
   let messagesAdded = 0;
   for (const m of messages) {
     if (!m.id) continue;
-    const before = await prisma.emailMessage.findUnique({
-      where: {
-        workspaceId_gmailMessageId: {
-          workspaceId: params.workspaceId,
-          gmailMessageId: m.id,
-        },
-      },
-    });
-    const result = await processGmailMessageForCrm({
-      userId: params.userId,
+    const wasExisting = existingIds.has(m.id);
+    const result = await processGmailMessagePayload({
       workspaceId: params.workspaceId,
-      userEmail: params.userEmail,
-      messageId: m.id,
+      message: m,
       skipLabelCheck: true,
     });
-    if (result && !before) messagesAdded++;
+    if (result && !wasExisting) messagesAdded++;
   }
   return messagesAdded;
 }
@@ -113,8 +112,9 @@ export async function importGmailMessageIdsForCrm(params: {
   userEmail: string;
   labelId: string;
   messageIds: string[];
+  gmail?: gmail_v1.Gmail;
 }): Promise<number> {
-  const gmail = await getAuthorizedClient(params.userId);
+  const gmail = params.gmail ?? (await getAuthorizedClient(params.userId));
   const threadsDone = new Set<string>();
   let messagesAdded = 0;
 
@@ -135,6 +135,7 @@ export async function importGmailMessageIdsForCrm(params: {
         userEmail: params.userEmail,
         threadId,
         labelId: params.labelId,
+        gmail,
       });
       continue;
     }
@@ -156,6 +157,7 @@ export async function importGmailMessageIdsForCrm(params: {
       messageId,
       labelId: hasLabel ? undefined : params.labelId,
       skipLabelCheck: hasLabel,
+      gmail,
     });
     if (result && !before) messagesAdded++;
   }

@@ -1,11 +1,11 @@
-import { syncUserGmail } from './syncUserGmail.js';
+import { syncUserGmail, type SyncUserGmailResult } from './syncUserGmail.js';
 
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const inFlight = new Map<string, Promise<void>>();
+const inFlight = new Map<string, Promise<SyncUserGmailResult>>();
 
 export type SyncLogPrefix = 'webhook' | 'settings' | 'daily' | 'manual' | 'cron';
 
-function logSyncResult(userId: string, prefix: SyncLogPrefix, result: Awaited<ReturnType<typeof syncUserGmail>>) {
+function logSyncResult(userId: string, prefix: SyncLogPrefix, result: SyncUserGmailResult) {
   if (result.error === 'no_sync_label' || result.error === 'label_not_found' || result.error === 'no_workspace') {
     console.log(`[${prefix}] Gmail sync skipped for ${userId}: ${result.error}`);
     return;
@@ -38,27 +38,33 @@ export function scheduleGmailSync(userId: string, prefix: SyncLogPrefix = 'webho
   debounceTimers.set(userId, timer);
 }
 
-export async function runGmailSyncForUser(userId: string, prefix: SyncLogPrefix = 'webhook') {
+export async function runGmailSyncForUser(
+  userId: string,
+  prefix: SyncLogPrefix = 'webhook',
+  workspaceId?: string
+): Promise<SyncUserGmailResult> {
   const existing = inFlight.get(userId);
   if (existing) return existing;
 
-  const work = (async () => {
+  const work = (async (): Promise<SyncUserGmailResult> => {
     try {
-      const result = await syncUserGmail(userId);
+      const result = await syncUserGmail(userId, workspaceId);
       logSyncResult(userId, prefix, result);
+      return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message === 'reauth_required' || message.includes('invalid_grant')) {
         console.log(`[${prefix}] Gmail sync skipped for ${userId}: invalid_grant`);
-      } else {
-        console.error(`[${prefix}] Gmail sync failed for ${userId}`, err);
+        return { messagesAdded: 0, messagesRemoved: 0, contactsTouched: 0 };
       }
+      console.error(`[${prefix}] Gmail sync failed for ${userId}`, err);
+      throw err;
     }
   })();
 
   inFlight.set(userId, work);
   try {
-    await work;
+    return await work;
   } finally {
     inFlight.delete(userId);
   }

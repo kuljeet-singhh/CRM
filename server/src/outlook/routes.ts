@@ -12,7 +12,7 @@ export const outlookRouter = Router();
 outlookRouter.use(requireAuth);
 outlookRouter.use('/calendar', outlookCalendarRouter);
 
-const UI_REFRESH_INTERVAL_MS = 15_000;
+const UI_REFRESH_INTERVAL_MS = 60_000;
 const MAIL_SYNC_INTERVAL_MS = 86_400_000;
 
 outlookRouter.get('/sync-config', (_req: AuthedRequest, res) => {

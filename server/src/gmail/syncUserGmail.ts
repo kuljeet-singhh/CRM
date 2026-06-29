@@ -33,6 +33,10 @@ async function removeLabeledMessages(workspaceId: string, gmailMessageIds: strin
   return existing.length;
 }
 
+function isGmailNotFound(err: unknown): boolean {
+  return (err as { code?: number })?.code === 404;
+}
+
 export async function syncUserGmail(userId: string, workspaceId?: string): Promise<SyncUserGmailResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -60,63 +64,61 @@ export async function syncUserGmail(userId: string, workspaceId?: string): Promi
   const labelId = crmLabel.labelId;
   const gmail = await getAuthorizedClient(userId);
 
-  const labelsRes = await gmail.users.labels.list({ userId: 'me' });
-  const label = labelsRes.data.labels?.find((l) => l.id === labelId || l.name === user.gmailSyncLabel);
-  if (!label?.id) {
-    return { messagesAdded: 0, messagesRemoved: 0, contactsTouched: 0, error: 'label_not_found' };
-  }
-
   const messageIdSet = new Set<string>();
   let removedIds: string[] = [];
   let newHistoryId = user.gmailLastHistoryId ?? undefined;
   let useFallbackList = !user.gmailLastHistoryId;
 
-  if (user.gmailLastHistoryId) {
-    const history = await collectHistoryMessageIds(gmail, user.gmailLastHistoryId, label.id);
-    for (const id of history.messageIds) messageIdSet.add(id);
-    removedIds = history.removedMessageIds;
-    if (history.historyId) newHistoryId = history.historyId;
-    if (history.historyNotFound) useFallbackList = true;
-  }
-
-  if (useFallbackList) {
-    for (const id of await listLabeledMessageIds(gmail, label.id, 100)) {
-      messageIdSet.add(id);
+  try {
+    if (user.gmailLastHistoryId) {
+      const history = await collectHistoryMessageIds(gmail, user.gmailLastHistoryId, labelId);
+      for (const id of history.messageIds) messageIdSet.add(id);
+      removedIds = history.removedMessageIds;
+      if (history.historyId) newHistoryId = history.historyId;
+      if (history.historyNotFound) useFallbackList = true;
     }
-  } else {
-    for (const id of await listLabeledMessageIds(gmail, label.id, 30)) {
-      messageIdSet.add(id);
+
+    if (useFallbackList) {
+      for (const id of await listLabeledMessageIds(gmail, labelId, 100)) {
+        messageIdSet.add(id);
+      }
+    } else {
+      for (const id of await listLabeledMessageIds(gmail, labelId, 30)) {
+        messageIdSet.add(id);
+      }
     }
-  }
 
-  const profile = await gmail.users.getProfile({ userId: 'me' });
-  if (profile.data.historyId) newHistoryId = profile.data.historyId;
+    const profile = await gmail.users.getProfile({ userId: 'me' });
+    if (profile.data.historyId) newHistoryId = profile.data.historyId;
 
-  const messagesRemoved = await removeLabeledMessages(wsId, removedIds);
+    const messagesRemoved = await removeLabeledMessages(wsId, removedIds);
 
-  const contactsBefore = await prisma.contact.count({ where: { workspaceId: wsId } });
-
-  const messagesAdded = await importGmailMessageIdsForCrm({
-    userId,
-    workspaceId: wsId,
-    userEmail: user.email,
-    labelId: label.id,
-    messageIds: [...messageIdSet],
-  });
-
-  const contactsAfter = await prisma.contact.count({ where: { workspaceId: wsId } });
-
-  if (newHistoryId) {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { gmailLastHistoryId: newHistoryId },
+    const messagesAdded = await importGmailMessageIdsForCrm({
+      userId,
+      workspaceId: wsId,
+      userEmail: user.email,
+      labelId,
+      messageIds: [...messageIdSet],
+      gmail,
     });
-  }
 
-  return {
-    messagesAdded,
-    messagesRemoved,
-    contactsTouched: Math.max(0, contactsAfter - contactsBefore),
-    historyId: newHistoryId,
-  };
+    if (newHistoryId) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { gmailLastHistoryId: newHistoryId },
+      });
+    }
+
+    return {
+      messagesAdded,
+      messagesRemoved,
+      contactsTouched: 0,
+      historyId: newHistoryId,
+    };
+  } catch (err) {
+    if (isGmailNotFound(err)) {
+      return { messagesAdded: 0, messagesRemoved: 0, contactsTouched: 0, error: 'label_not_found' };
+    }
+    throw err;
+  }
 }

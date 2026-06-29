@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -8,7 +8,7 @@ import { usePreferences } from '@/lib/preferences';
 import type { CalendarSyncConfig, CalendarSyncResult, GmailSyncConfig, MailProvider, SyncResult } from '@/types';
 
 const POLL_SYNC_INTERVAL_MS = 3 * 60 * 1000;
-const DEFAULT_UI_REFRESH_MS = 15_000;
+const DEFAULT_UI_REFRESH_MS = 60_000;
 const DEFAULT_MAIL_SYNC_MS = 86_400_000;
 
 function dailySyncStorageKey(userId: string) {
@@ -63,6 +63,7 @@ export function useBackgroundSync(
   const queryClient = useQueryClient();
   const { settings } = usePreferences();
   const calendarSyncEnabled = Boolean(settings?.calendarSyncEnabled);
+  const mailSyncKeyRef = useRef<string | null>(null);
 
   const gmailSyncConfigQuery = useQuery({
     queryKey: ['gmail', 'sync-config'],
@@ -131,13 +132,20 @@ export function useBackgroundSync(
   }, [provider, enabled, userId, calendarSyncEnabled, calendarSyncMs, queryClient]);
 
   useEffect(() => {
-    if (!provider || !enabled || !userId) return;
-    if (syncConfigPending) return;
+    if (!provider || !enabled || !userId || syncConfigPending) return;
+
+    const mailSyncKey = `${provider}:${userId}:${pushEnabled}`;
+    if (mailSyncKeyRef.current === mailSyncKey) return;
+    mailSyncKeyRef.current = mailSyncKey;
 
     if (pushEnabled) {
       const refreshUi = () => {
         if (document.visibilityState !== 'visible') return;
         queryClient.invalidateQueries({ queryKey: ['messages'] });
+      };
+
+      const onVisibilityChange = () => {
+        if (document.visibilityState === 'visible') refreshUi();
       };
 
       const runSessionStartSync = async () => {
@@ -148,8 +156,8 @@ export function useBackgroundSync(
             method: 'POST',
           });
           markSessionSyncDone(userId, provider);
-          queryClient.invalidateQueries({ queryKey: ['messages'] });
           if (result.messagesAdded > 0 || (result.messagesUpdated ?? 0) > 0) {
+            queryClient.invalidateQueries({ queryKey: ['messages'] });
             toast.success(syncToastMessage(result));
           }
         } catch {
@@ -174,14 +182,18 @@ export function useBackgroundSync(
         }
       };
 
-      refreshUi();
       void runSessionStartSync();
       void runDailyMailSync();
+      document.addEventListener('visibilitychange', onVisibilityChange);
       const uiId = setInterval(refreshUi, uiRefreshMs);
       const mailId = setInterval(runDailyMailSync, mailSyncMs);
       return () => {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
         clearInterval(uiId);
         clearInterval(mailId);
+        if (mailSyncKeyRef.current === mailSyncKey) {
+          mailSyncKeyRef.current = null;
+        }
       };
     }
 
@@ -200,17 +212,13 @@ export function useBackgroundSync(
       }
     };
 
-    runPollSync();
+    void runPollSync();
     const id = setInterval(runPollSync, POLL_SYNC_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [
-    provider,
-    enabled,
-    userId,
-    pushEnabled,
-    syncConfigPending,
-    uiRefreshMs,
-    mailSyncMs,
-    queryClient,
-  ]);
+    return () => {
+      clearInterval(id);
+      if (mailSyncKeyRef.current === mailSyncKey) {
+        mailSyncKeyRef.current = null;
+      }
+    };
+  }, [provider, enabled, userId, pushEnabled, syncConfigPending, uiRefreshMs, mailSyncMs, queryClient]);
 }

@@ -1,9 +1,65 @@
-import { prisma } from '../db.js';
+import type { gmail_v1 } from 'googleapis';
 import { getAuthorizedClient } from '../auth/tokens.js';
 import { logEmailToCrm } from '../contacts/upsert.js';
 import { buildMimeMessage, toBase64Url } from './mime.js';
 import { parseAddressList, parseEmailAddress } from './parser.js';
 import { extractBody } from './body.js';
+
+function headerValue(
+  headers: gmail_v1.Schema$MessagePartHeader[] | undefined,
+  name: string
+): string {
+  return headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? '';
+}
+
+export async function processGmailMessagePayload(params: {
+  workspaceId: string;
+  message: gmail_v1.Schema$Message;
+  labelId?: string;
+  skipLabelCheck?: boolean;
+}) {
+  const msg = params.message;
+  if (!msg.id) return null;
+
+  const headers = msg.payload?.headers ?? [];
+  const subject = headerValue(headers, 'subject');
+  const fromRaw = headerValue(headers, 'from');
+  const toRaw = headerValue(headers, 'to');
+  const ccRaw = headerValue(headers, 'cc');
+  const rfcId = headerValue(headers, 'message-id') || undefined;
+  const dateStr = headerValue(headers, 'date');
+
+  const from = parseEmailAddress(fromRaw);
+  const toList = parseAddressList(toRaw);
+  const ccList = parseAddressList(ccRaw);
+  const { text, html } = extractBody(msg.payload ?? undefined);
+
+  const labelIds = msg.labelIds ?? [];
+  const direction = labelIds.includes('SENT') ? 'sent' : 'received';
+
+  const participants: { email: string; name?: string; role: 'from' | 'to' | 'cc' }[] = [
+    { email: from.email, name: from.name, role: 'from' },
+    ...toList.map((p) => ({ ...p, role: 'to' as const })),
+    ...ccList.map((p) => ({ ...p, role: 'cc' as const })),
+  ];
+
+  if (params.labelId && !params.skipLabelCheck && !labelIds.includes(params.labelId)) {
+    return null;
+  }
+
+  return logEmailToCrm({
+    workspaceId: params.workspaceId,
+    gmailMessageId: msg.id,
+    gmailThreadId: msg.threadId ?? undefined,
+    rfcMessageId: rfcId,
+    subject,
+    bodyText: text,
+    bodyHtml: html,
+    direction,
+    sentAt: dateStr ? new Date(dateStr) : new Date(parseInt(msg.internalDate ?? '0', 10)),
+    participants,
+  });
+}
 
 export async function sendGmailMessage(params: {
   userId: string;
@@ -15,9 +71,9 @@ export async function sendGmailMessage(params: {
   body: string;
   inReplyTo?: string;
   gmailThreadId?: string;
+  crmLabelId?: string | null;
 }) {
   const gmail = await getAuthorizedClient(params.userId);
-  const user = await prisma.user.findUnique({ where: { id: params.userId } });
 
   const mime = buildMimeMessage({
     from: params.fromEmail,
@@ -40,19 +96,20 @@ export async function sendGmailMessage(params: {
   const messageId = sendRes.data.id;
   if (!messageId) throw new Error('send_failed');
 
-  const full = await gmail.users.messages.get({ userId: 'me', id: messageId, format: 'metadata' });
+  const full = await gmail.users.messages.get({
+    userId: 'me',
+    id: messageId,
+    format: 'metadata',
+    metadataHeaders: ['Message-Id'],
+  });
   const rfcId = full.data.payload?.headers?.find((h) => h.name?.toLowerCase() === 'message-id')?.value;
 
-  if (user?.gmailSyncLabel) {
-    const labels = await gmail.users.labels.list({ userId: 'me' });
-    const label = labels.data.labels?.find((l) => l.name === user.gmailSyncLabel);
-    if (label?.id) {
-      await gmail.users.messages.modify({
-        userId: 'me',
-        id: messageId,
-        requestBody: { addLabelIds: [label.id] },
-      });
-    }
+  if (params.crmLabelId) {
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: messageId,
+      requestBody: { addLabelIds: [params.crmLabelId] },
+    });
   }
 
   const participants = [
@@ -82,52 +139,20 @@ export async function processGmailMessageForCrm(params: {
   userEmail: string;
   messageId: string;
   labelId?: string;
-  /** When true, import even if CRM label is not on this message (e.g. thread expansion). */
   skipLabelCheck?: boolean;
+  gmail?: gmail_v1.Gmail;
 }) {
-  const gmail = await getAuthorizedClient(params.userId);
+  const gmail = params.gmail ?? (await getAuthorizedClient(params.userId));
   const msg = await gmail.users.messages.get({
     userId: 'me',
     id: params.messageId,
     format: 'full',
   });
 
-  const headers = msg.data.payload?.headers ?? [];
-  const subject = headers.find((h) => h.name?.toLowerCase() === 'subject')?.value ?? '';
-  const fromRaw = headers.find((h) => h.name?.toLowerCase() === 'from')?.value ?? '';
-  const toRaw = headers.find((h) => h.name?.toLowerCase() === 'to')?.value ?? '';
-  const ccRaw = headers.find((h) => h.name?.toLowerCase() === 'cc')?.value ?? '';
-  const rfcId = headers.find((h) => h.name?.toLowerCase() === 'message-id')?.value;
-  const dateStr = headers.find((h) => h.name?.toLowerCase() === 'date')?.value;
-
-  const from = parseEmailAddress(fromRaw);
-  const toList = parseAddressList(toRaw);
-  const ccList = parseAddressList(ccRaw);
-  const { text, html } = extractBody(msg.data.payload ?? undefined);
-
-  const labelIds = msg.data.labelIds ?? [];
-  const direction = labelIds.includes('SENT') ? 'sent' : 'received';
-
-  const participants: { email: string; name?: string; role: 'from' | 'to' | 'cc' }[] = [
-    { email: from.email, name: from.name, role: 'from' },
-    ...toList.map((p) => ({ ...p, role: 'to' as const })),
-    ...ccList.map((p) => ({ ...p, role: 'cc' as const })),
-  ];
-
-  if (params.labelId && !params.skipLabelCheck && !labelIds.includes(params.labelId)) {
-    return null;
-  }
-
-  return logEmailToCrm({
+  return processGmailMessagePayload({
     workspaceId: params.workspaceId,
-    gmailMessageId: params.messageId,
-    gmailThreadId: msg.data.threadId ?? undefined,
-    rfcMessageId: rfcId ?? undefined,
-    subject,
-    bodyText: text,
-    bodyHtml: html,
-    direction,
-    sentAt: dateStr ? new Date(dateStr) : new Date(parseInt(msg.data.internalDate ?? '0', 10)),
-    participants,
+    message: msg.data,
+    labelId: params.labelId,
+    skipLabelCheck: params.skipLabelCheck,
   });
 }

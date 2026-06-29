@@ -386,8 +386,8 @@ export function SettingsModal({
             {pushEnabled && (
               <p className="text-sm text-muted-foreground rounded-md border border-border/50 bg-muted/30 px-3 py-2">
                 {provider === 'outlook'
-                  ? 'Real-time sync via Outlook webhooks is active. The inbox refreshes from the database every few seconds.'
-                  : 'Real-time sync via Gmail push is active. The inbox refreshes from the database every few seconds.'}
+                  ? 'Real-time sync via Outlook webhooks is active. The inbox refreshes from the database about once per minute.'
+                  : 'Real-time sync via Gmail push is active. The inbox refreshes from the database about once per minute.'}
               </p>
             )}
             <div className="space-y-1.5">

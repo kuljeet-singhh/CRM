@@ -29,6 +29,7 @@ export async function handleThreadSync(payload: {
       userEmail: user.email,
       threadId,
       labelId,
+      gmail,
     });
   }
 
@@ -38,6 +39,7 @@ export async function handleThreadSync(payload: {
     userEmail: user.email,
     messageId: payload.messageId,
     labelId,
+    gmail,
   });
   return 1;
 }
