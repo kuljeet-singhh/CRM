@@ -15,6 +15,7 @@ outlookRouter.use('/calendar', outlookCalendarRouter);
 
 const UI_REFRESH_FALLBACK_MS = 60_000;
 const MAIL_SYNC_INTERVAL_MS = 86_400_000;
+const MAIL_RECONCILE_INTERVAL_MS = 180_000;
 
 outlookRouter.get('/sync-config', (_req: AuthedRequest, res) => {
   const eventsEnabled = isMessageEventsEnabled();
@@ -22,6 +23,7 @@ outlookRouter.get('/sync-config', (_req: AuthedRequest, res) => {
     pushEnabled: isOutlookPushEnabled(),
     eventsEnabled,
     mailSyncIntervalMs: MAIL_SYNC_INTERVAL_MS,
+    mailReconcileIntervalMs: MAIL_RECONCILE_INTERVAL_MS,
     uiRefreshIntervalMs: eventsEnabled ? 0 : UI_REFRESH_FALLBACK_MS,
   });
 });

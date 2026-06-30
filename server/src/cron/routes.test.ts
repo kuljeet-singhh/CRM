@@ -2,13 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
-const { pollOnce, runIncrementalMailboxSync } = vi.hoisted(() => ({
-  pollOnce: vi.fn().mockResolvedValue(undefined),
-  runIncrementalMailboxSync: vi.fn().mockResolvedValue({ gmailUsers: 2, outlookUsers: 1 }),
+const { runIncrementalMailboxSync } = vi.hoisted(() => ({
+  runIncrementalMailboxSync: vi.fn().mockResolvedValue({
+    gmailUsers: 2,
+    outlookUsers: 1,
+    gmailUsersSynced: 2,
+    outlookUsersSynced: 1,
+  }),
 }));
 
-vi.mock('../queue/worker.js', () => ({ pollOnce }));
-vi.mock('./mailboxSync.js', () => ({ runIncrementalMailboxSync }));
+vi.mock('./mailboxSync.js', () => ({
+  CRON_MAILBOX_SYNC_BUDGET_MS: 50_000,
+  runIncrementalMailboxSync,
+}));
 
 vi.mock('../env.js', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../env.js')>();
@@ -35,17 +41,22 @@ describe('cron sync-worker', () => {
   it('returns 401 without cron secret', async () => {
     const res = await request(createApp()).post('/api/cron/sync-worker');
     expect(res.status).toBe(401);
-    expect(pollOnce).not.toHaveBeenCalled();
+    expect(runIncrementalMailboxSync).not.toHaveBeenCalled();
   });
 
-  it('drains queue and runs mailbox sync', async () => {
+  it('runs mailbox sync with time budget', async () => {
     const res = await request(createApp())
       .post('/api/cron/sync-worker')
       .set('Authorization', 'Bearer test-cron-secret');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true, gmailUsers: 2, outlookUsers: 1 });
-    expect(pollOnce).toHaveBeenCalledOnce();
-    expect(runIncrementalMailboxSync).toHaveBeenCalledOnce();
+    expect(res.body).toEqual({
+      ok: true,
+      gmailUsers: 2,
+      outlookUsers: 1,
+      gmailUsersSynced: 2,
+      outlookUsersSynced: 1,
+    });
+    expect(runIncrementalMailboxSync).toHaveBeenCalledWith({ timeBudgetMs: 50_000 });
   });
 });

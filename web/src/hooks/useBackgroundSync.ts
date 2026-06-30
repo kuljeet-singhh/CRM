@@ -10,6 +10,7 @@ import type { CalendarSyncConfig, CalendarSyncResult, GmailSyncConfig, MailProvi
 
 const POLL_SYNC_INTERVAL_MS = 3 * 60 * 1000;
 const DEFAULT_UI_REFRESH_FALLBACK_MS = 60_000;
+const DEFAULT_MAIL_RECONCILE_MS = 180_000;
 const DEFAULT_MAIL_SYNC_MS = 86_400_000;
 
 function dailySyncStorageKey(userId: string) {
@@ -107,6 +108,7 @@ export function useBackgroundSync(
   const eventsEnabled = Boolean(syncConfig?.eventsEnabled);
   const uiRefreshMs = syncConfig?.uiRefreshIntervalMs || DEFAULT_UI_REFRESH_FALLBACK_MS;
   const mailSyncMs = syncConfig?.mailSyncIntervalMs ?? DEFAULT_MAIL_SYNC_MS;
+  const mailReconcileMs = syncConfig?.mailReconcileIntervalMs ?? DEFAULT_MAIL_RECONCILE_MS;
   const calendarSyncConfig =
     provider === 'gmail' ? gmailCalendarSyncConfigQuery.data : outlookCalendarSyncConfigQuery.data;
   const calendarSyncMs = calendarSyncConfig?.syncIntervalMs ?? DEFAULT_MAIL_SYNC_MS;
@@ -186,8 +188,25 @@ export function useBackgroundSync(
         }
       };
 
+      const runReconcileMailSync = async () => {
+        if (document.visibilityState !== 'visible') return;
+        try {
+          const result = await api<SyncResult>(`${mailApiBase(provider)}/sync`, {
+            method: 'POST',
+          });
+          if (result.messagesAdded > 0 || (result.messagesUpdated ?? 0) > 0) {
+            queryClient.invalidateQueries({ queryKey: ['messages'] });
+            queryClient.refetchQueries({ queryKey: ['messages', 'thread'], type: 'active' });
+          }
+        } catch {
+          /* silent */
+        }
+      };
+
       void runSessionStartSync();
       void runDailyMailSync();
+
+      const reconcileId = setInterval(runReconcileMailSync, mailReconcileMs);
 
       if (!eventsEnabled) {
         refreshUi();
@@ -198,6 +217,7 @@ export function useBackgroundSync(
           document.removeEventListener('visibilitychange', onVisibilityChange);
           clearInterval(uiId);
           clearInterval(mailId);
+          clearInterval(reconcileId);
           if (mailSyncKeyRef.current === mailSyncKey) {
             mailSyncKeyRef.current = null;
           }
@@ -207,6 +227,7 @@ export function useBackgroundSync(
       const mailId = setInterval(runDailyMailSync, mailSyncMs);
       return () => {
         clearInterval(mailId);
+        clearInterval(reconcileId);
         if (mailSyncKeyRef.current === mailSyncKey) {
           mailSyncKeyRef.current = null;
         }
@@ -245,6 +266,7 @@ export function useBackgroundSync(
     syncConfigPending,
     uiRefreshMs,
     mailSyncMs,
+    mailReconcileMs,
     queryClient,
   ]);
 }

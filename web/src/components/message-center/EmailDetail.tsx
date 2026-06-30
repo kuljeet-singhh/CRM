@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,9 @@ export function EmailDetail({
   onThreadOpened,
 }: EmailDetailProps) {
   const { formatRelativeTime } = useFormatters();
+  const queryClient = useQueryClient();
   const threadId = message?.gmailThreadId ?? message?.conversationId ?? null;
+  const gmailThreadId = message?.gmailThreadId ?? null;
 
   const threadQuery = useQuery({
     queryKey: ['messages', 'thread', threadId],
@@ -36,6 +38,24 @@ export function EmailDetail({
     enabled: open && Boolean(threadId),
     staleTime: 0,
   });
+
+  useEffect(() => {
+    if (!open || !gmailThreadId) return;
+
+    void api<{ messagesAdded: number; messagesUpdated: number }>(
+      `/api/gmail/threads/${encodeURIComponent(gmailThreadId)}/sync`,
+      { method: 'POST' }
+    )
+      .then((result) => {
+        if (result.messagesAdded > 0 || (result.messagesUpdated ?? 0) > 0) {
+          void queryClient.invalidateQueries({ queryKey: ['messages'] });
+          void queryClient.invalidateQueries({ queryKey: ['messages', 'thread', threadId] });
+        }
+      })
+      .catch(() => {
+        /* silent */
+      });
+  }, [open, gmailThreadId, threadId, queryClient]);
 
   const threadMessages = threadId
     ? (threadQuery.data?.messages ?? (message ? [message] : []))

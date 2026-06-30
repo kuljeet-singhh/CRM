@@ -158,6 +158,7 @@ export interface GmailSyncConfig {
   pushEnabled: boolean;
   eventsEnabled: boolean;
   mailSyncIntervalMs: number;
+  mailReconcileIntervalMs: number;
   uiRefreshIntervalMs: number;
 }
 

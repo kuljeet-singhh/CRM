@@ -6,6 +6,7 @@ import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
 import { getAuthorizedClient } from '../auth/tokens.js';
 import { sendGmailMessage } from './send.js';
 import { manualGmailSync } from './sync.js';
+import { syncGmailThreadForUser } from './threadSync.js';
 import { gmailCalendarRouter } from './calendar/routes.js';
 import { listGoogleCalendars } from './calendar/list.js';
 
@@ -15,6 +16,7 @@ gmailRouter.use('/calendar', gmailCalendarRouter);
 
 const UI_REFRESH_FALLBACK_MS = 60_000;
 const MAIL_SYNC_INTERVAL_MS = 86_400_000;
+const MAIL_RECONCILE_INTERVAL_MS = 180_000;
 
 gmailRouter.get('/sync-config', (_req: AuthedRequest, res) => {
   const eventsEnabled = isMessageEventsEnabled();
@@ -22,6 +24,7 @@ gmailRouter.get('/sync-config', (_req: AuthedRequest, res) => {
     pushEnabled: Boolean(env.gmailPubsubTopic),
     eventsEnabled,
     mailSyncIntervalMs: MAIL_SYNC_INTERVAL_MS,
+    mailReconcileIntervalMs: MAIL_RECONCILE_INTERVAL_MS,
     uiRefreshIntervalMs: eventsEnabled ? 0 : UI_REFRESH_FALLBACK_MS,
   });
 });
@@ -181,5 +184,29 @@ gmailRouter.post('/sync', async (req: AuthedRequest, res) => {
     }
     console.error('[gmail/sync]', err);
     res.status(500).json({ error: 'sync_failed' });
+  }
+});
+
+gmailRouter.post('/threads/:threadId/sync', async (req: AuthedRequest, res) => {
+  const threadId = req.params.threadId;
+  if (!threadId) {
+    res.status(400).json({ error: 'thread_id_required' });
+    return;
+  }
+
+  try {
+    const result = await syncGmailThreadForUser(req.userId!, req.workspaceId!, threadId);
+    if (result.error === 'no_sync_label') {
+      res.status(400).json({ error: 'no_sync_label' });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    if ((err as Error).message === 'reauth_required') {
+      res.status(401).json({ error: 'reauth_required' });
+      return;
+    }
+    console.error('[gmail/thread-sync]', err);
+    res.status(500).json({ error: 'thread_sync_failed' });
   }
 });

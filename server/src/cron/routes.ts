@@ -1,11 +1,13 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { env } from '../env.js';
-import { pollOnce } from '../queue/worker.js';
 import { renewExpiredWatches } from '../gmail/watchManager.js';
 import { runDailyGmailSync } from '../gmail/dailySync.js';
 import { renewAllOutlookSubscriptions } from '../outlook/subscriptionManager.js';
 import { runDailyOutlookSync } from '../outlook/dailySync.js';
-import { runIncrementalMailboxSync } from './mailboxSync.js';
+import {
+  CRON_MAILBOX_SYNC_BUDGET_MS,
+  runIncrementalMailboxSync,
+} from './mailboxSync.js';
 import { runDailyCalendarSync } from './calendarDailySync.js';
 
 export const cronRouter = Router();
@@ -27,8 +29,9 @@ function requireCronSecret(req: Request, res: Response, next: NextFunction) {
 cronRouter.use(requireCronSecret);
 
 cronRouter.all('/sync-worker', async (_req, res) => {
-  await pollOnce();
-  const mailbox = await runIncrementalMailboxSync();
+  const mailbox = await runIncrementalMailboxSync({
+    timeBudgetMs: CRON_MAILBOX_SYNC_BUDGET_MS,
+  });
   res.json({ ok: true, ...mailbox });
 });
 

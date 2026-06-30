@@ -2,6 +2,18 @@ import { prisma } from '../db.js';
 import { env } from '../env.js';
 import { getAuthorizedClient } from '../auth/tokens.js';
 
+/** CRM label + INBOX so inbound replies trigger Pub/Sub even before CRM label is applied. */
+export function resolveGmailWatchLabelIds(
+  labels: { id?: string | null; name?: string | null }[] | undefined,
+  crmLabelId: string
+): string[] {
+  const inboxId = labels?.find((l) => l.id === 'INBOX' || l.name === 'INBOX')?.id;
+  if (inboxId && inboxId !== crmLabelId) {
+    return [crmLabelId, inboxId];
+  }
+  return [crmLabelId];
+}
+
 export async function ensureGmailWatch(userId: string): Promise<{ expiresAt?: Date; warning?: string }> {
   if (!env.gmailPubsubTopic) {
     console.log('[gmail-watch] skipped: GMAIL_PUBSUB_TOPIC not configured');
@@ -32,11 +44,14 @@ export async function ensureGmailWatch(userId: string): Promise<{ expiresAt?: Da
 
   try {
     const gmail = await getAuthorizedClient(userId);
+    const labelsRes = await gmail.users.labels.list({ userId: 'me' });
+    const watchLabelIds = resolveGmailWatchLabelIds(labelsRes.data.labels ?? undefined, crmLabel.labelId);
+
     const res = await gmail.users.watch({
       userId: 'me',
       requestBody: {
         topicName: env.gmailPubsubTopic,
-        labelIds: [crmLabel.labelId],
+        labelIds: watchLabelIds,
         labelFilterAction: 'include',
       },
     });
@@ -52,7 +67,9 @@ export async function ensureGmailWatch(userId: string): Promise<{ expiresAt?: Da
       },
     });
 
-    console.log(`[gmail-watch] Gmail watch renewed for ${userId} (label: ${user.gmailSyncLabel})`);
+    console.log(
+      `[gmail-watch] Gmail watch renewed for ${userId} (labels: ${user.gmailSyncLabel}, INBOX)`
+    );
     return { expiresAt };
   } catch (err) {
     console.error('[gmail-watch] registration_failed', err);
