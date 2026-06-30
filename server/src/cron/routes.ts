@@ -6,7 +6,10 @@ import { renewAllOutlookSubscriptions } from '../outlook/subscriptionManager.js'
 import { runDailyOutlookSync } from '../outlook/dailySync.js';
 import {
   CRON_MAILBOX_SYNC_BUDGET_MS,
+  CRON_MAILBOX_SYNC_PER_USER_TIMEOUT_MS,
+  CRON_SYNC_WORKER_RESPONSE_DEADLINE_MS,
   runIncrementalMailboxSync,
+  type IncrementalMailboxSyncResult,
 } from './mailboxSync.js';
 import { runDailyCalendarSync } from './calendarDailySync.js';
 
@@ -29,9 +32,27 @@ function requireCronSecret(req: Request, res: Response, next: NextFunction) {
 cronRouter.use(requireCronSecret);
 
 cronRouter.all('/sync-worker', async (_req, res) => {
-  const mailbox = await runIncrementalMailboxSync({
+  const syncPromise = runIncrementalMailboxSync({
     timeBudgetMs: CRON_MAILBOX_SYNC_BUDGET_MS,
+    perUserTimeoutMs: CRON_MAILBOX_SYNC_PER_USER_TIMEOUT_MS,
   });
+
+  const deadlinePromise = new Promise<IncrementalMailboxSyncResult>((resolve) => {
+    setTimeout(
+      () =>
+        resolve({
+          gmailUsers: 0,
+          outlookUsers: 0,
+          gmailUsersSynced: 0,
+          outlookUsersSynced: 0,
+          partial: true,
+          timedOut: true,
+        }),
+      CRON_SYNC_WORKER_RESPONSE_DEADLINE_MS
+    );
+  });
+
+  const mailbox = await Promise.race([syncPromise, deadlinePromise]);
   res.json({ ok: true, ...mailbox });
 });
 

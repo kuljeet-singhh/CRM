@@ -57,4 +57,24 @@ describe('runIncrementalMailboxSync', () => {
     expect(result.gmailUsersSynced).toBeLessThan(3);
     expect(result.partial).toBe(true);
   });
+
+  it('marks partial when a user sync exceeds per-user timeout', async () => {
+    runGmailSyncForUser.mockImplementation(async (userId: string) => {
+      if (userId === 'u2') {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      return {
+        messagesAdded: 0,
+        messagesUpdated: 0,
+        messagesRemoved: 0,
+        messagesLabeled: 0,
+        contactsTouched: 0,
+      };
+    });
+
+    const result = await runIncrementalMailboxSync({ perUserTimeoutMs: 50 });
+    expect(result.partial).toBe(true);
+    expect(result.gmailUsersSynced).toBe(2);
+    expect(runGmailSyncForUser).toHaveBeenCalledTimes(3);
+  });
 });

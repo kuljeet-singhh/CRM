@@ -6,6 +6,10 @@ import {
   listLabeledMessageIds,
 } from './import.js';
 
+export type SyncUserGmailOptions = {
+  labeledMessageLimit?: number;
+};
+
 export type SyncUserGmailResult = {
   messagesAdded: number;
   messagesUpdated: number;
@@ -39,7 +43,11 @@ function isGmailNotFound(err: unknown): boolean {
   return (err as { code?: number })?.code === 404;
 }
 
-export async function syncUserGmail(userId: string, workspaceId?: string): Promise<SyncUserGmailResult> {
+export async function syncUserGmail(
+  userId: string,
+  workspaceId?: string,
+  options?: SyncUserGmailOptions
+): Promise<SyncUserGmailResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: { crmLabels: true },
@@ -112,8 +120,8 @@ export async function syncUserGmail(userId: string, workspaceId?: string): Promi
       if (history.historyId) newHistoryId = history.historyId;
     }
 
-    // Always reconcile every labeled message and expand threads (catches unlabeled replies).
-    for (const id of await listLabeledMessageIds(gmail, label.id, 100)) {
+    const labeledLimit = options?.labeledMessageLimit ?? 100;
+    for (const id of await listLabeledMessageIds(gmail, label.id, labeledLimit)) {
       messageIdSet.add(id);
     }
 

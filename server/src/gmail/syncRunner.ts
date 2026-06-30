@@ -1,6 +1,10 @@
 import { prisma } from '../db.js';
 import { publishMessagesChanged } from '../events/messageBus.js';
-import { syncUserGmail, type SyncUserGmailResult } from './syncUserGmail.js';
+import {
+  syncUserGmail,
+  type SyncUserGmailOptions,
+  type SyncUserGmailResult,
+} from './syncUserGmail.js';
 
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const inFlight = new Map<string, Promise<SyncUserGmailResult>>();
@@ -77,15 +81,19 @@ export function scheduleGmailSync(userId: string, prefix: SyncLogPrefix = 'webho
 export async function runGmailSyncForUser(
   userId: string,
   prefix: SyncLogPrefix = 'webhook',
-  workspaceId?: string
+  workspaceId?: string,
+  options?: SyncUserGmailOptions
 ): Promise<SyncUserGmailResult> {
   const existing = inFlight.get(userId);
   if (existing) return existing;
 
+  const syncOptions =
+    options ?? (prefix === 'cron' ? { labeledMessageLimit: 25 } : undefined);
+
   const work = (async (): Promise<SyncUserGmailResult> => {
     try {
       const wsId = workspaceId ?? (await getDefaultWorkspaceId(userId)) ?? undefined;
-      const result = await syncUserGmail(userId, wsId);
+      const result = await syncUserGmail(userId, wsId, syncOptions);
       logSyncResult(userId, prefix, result);
       await notifyIfChanged(wsId ?? null, result);
       return result;
