@@ -58,6 +58,8 @@ export const env = {
   outlookWebhookUrl: optional('OUTLOOK_WEBHOOK_URL').replace(/\/$/, ''),
   outlookWebhookClientState: optional('OUTLOOK_WEBHOOK_CLIENT_STATE'),
   cronSecret: optional('CRON_SECRET'),
+  upstashRedisRestUrl: optional('UPSTASH_REDIS_REST_URL'),
+  upstashRedisRestToken: optional('UPSTASH_REDIS_REST_TOKEN'),
 };
 
 export function isMicrosoftConfigured(): boolean {

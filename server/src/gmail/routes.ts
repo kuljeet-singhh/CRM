@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../db.js';
 import { env } from '../env.js';
+import { isMessageEventsEnabled } from '../events/messageBus.js';
 import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
 import { getAuthorizedClient } from '../auth/tokens.js';
 import { sendGmailMessage } from './send.js';
@@ -12,14 +13,16 @@ export const gmailRouter = Router();
 gmailRouter.use(requireAuth);
 gmailRouter.use('/calendar', gmailCalendarRouter);
 
-const UI_REFRESH_INTERVAL_MS = 60_000;
+const UI_REFRESH_FALLBACK_MS = 60_000;
 const MAIL_SYNC_INTERVAL_MS = 86_400_000;
 
 gmailRouter.get('/sync-config', (_req: AuthedRequest, res) => {
+  const eventsEnabled = isMessageEventsEnabled();
   res.json({
     pushEnabled: Boolean(env.gmailPubsubTopic),
+    eventsEnabled,
     mailSyncIntervalMs: MAIL_SYNC_INTERVAL_MS,
-    uiRefreshIntervalMs: UI_REFRESH_INTERVAL_MS,
+    uiRefreshIntervalMs: eventsEnabled ? 0 : UI_REFRESH_FALLBACK_MS,
   });
 });
 

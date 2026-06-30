@@ -4,6 +4,7 @@ import { logEmailToCrm } from '../contacts/upsert.js';
 import { buildMimeMessage, toBase64Url } from './mime.js';
 import { parseAddressList, parseEmailAddress } from './parser.js';
 import { extractBody } from './body.js';
+import { applyCrmLabelToThreadMessages } from './threadLabel.js';
 
 function headerValue(
   headers: gmail_v1.Schema$MessagePartHeader[] | undefined,
@@ -104,12 +105,18 @@ export async function sendGmailMessage(params: {
   });
   const rfcId = full.data.payload?.headers?.find((h) => h.name?.toLowerCase() === 'message-id')?.value;
 
+  const threadId = full.data.threadId ?? params.gmailThreadId;
+
   if (params.crmLabelId) {
-    await gmail.users.messages.modify({
-      userId: 'me',
-      id: messageId,
-      requestBody: { addLabelIds: [params.crmLabelId] },
-    });
+    if (threadId) {
+      await applyCrmLabelToThreadMessages(gmail, threadId, params.crmLabelId);
+    } else {
+      await gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        requestBody: { addLabelIds: [params.crmLabelId] },
+      });
+    }
   }
 
   const participants = [
@@ -121,7 +128,7 @@ export async function sendGmailMessage(params: {
   await logEmailToCrm({
     workspaceId: params.workspaceId,
     gmailMessageId: messageId,
-    gmailThreadId: full.data.threadId ?? params.gmailThreadId,
+    gmailThreadId: threadId,
     rfcMessageId: rfcId ?? undefined,
     subject: params.subject,
     bodyText: params.body,
@@ -130,7 +137,7 @@ export async function sendGmailMessage(params: {
     participants,
   });
 
-  return { messageId, threadId: full.data.threadId, rfcMessageId: rfcId };
+  return { messageId, threadId, rfcMessageId: rfcId };
 }
 
 export async function processGmailMessageForCrm(params: {

@@ -1,4 +1,5 @@
 import { prisma } from '../db.js';
+import { publishMessagesChanged } from '../events/messageBus.js';
 import { manualOutlookSync, type OutlookSyncResult } from './sync.js';
 
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -31,6 +32,15 @@ function logSyncResult(userId: string, prefix: OutlookSyncLogPrefix, result: Out
   );
 }
 
+async function notifyIfChanged(workspaceId: string | null, result: OutlookSyncResult): Promise<void> {
+  if (!workspaceId || result.error) return;
+  if (result.messagesAdded === 0 && (result.messagesUpdated ?? 0) === 0) return;
+  await publishMessagesChanged(workspaceId, {
+    added: result.messagesAdded,
+    updated: result.messagesUpdated ?? 0,
+  });
+}
+
 export function scheduleOutlookSync(userId: string, prefix: OutlookSyncLogPrefix = 'webhook') {
   const existing = debounceTimers.get(userId);
   if (existing) clearTimeout(existing);
@@ -59,6 +69,7 @@ export async function runOutlookSyncForUser(
       }
       const result = await manualOutlookSync(userId, workspaceId);
       logSyncResult(userId, prefix, result);
+      await notifyIfChanged(workspaceId, result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message === 'reauth_required') {

@@ -5,10 +5,11 @@ import { api } from '@/lib/api';
 import { mailApiBase } from '@/lib/provider';
 import { syncToastMessage } from '@/lib/syncResult';
 import { usePreferences } from '@/lib/preferences';
+import { useMessageEvents } from '@/hooks/useMessageEvents';
 import type { CalendarSyncConfig, CalendarSyncResult, GmailSyncConfig, MailProvider, SyncResult } from '@/types';
 
 const POLL_SYNC_INTERVAL_MS = 3 * 60 * 1000;
-const DEFAULT_UI_REFRESH_MS = 60_000;
+const DEFAULT_UI_REFRESH_FALLBACK_MS = 60_000;
 const DEFAULT_MAIL_SYNC_MS = 86_400_000;
 
 function dailySyncStorageKey(userId: string) {
@@ -103,11 +104,14 @@ export function useBackgroundSync(
         : false;
 
   const pushEnabled = Boolean(syncConfig?.pushEnabled);
-  const uiRefreshMs = syncConfig?.uiRefreshIntervalMs ?? DEFAULT_UI_REFRESH_MS;
+  const eventsEnabled = Boolean(syncConfig?.eventsEnabled);
+  const uiRefreshMs = syncConfig?.uiRefreshIntervalMs || DEFAULT_UI_REFRESH_FALLBACK_MS;
   const mailSyncMs = syncConfig?.mailSyncIntervalMs ?? DEFAULT_MAIL_SYNC_MS;
   const calendarSyncConfig =
     provider === 'gmail' ? gmailCalendarSyncConfigQuery.data : outlookCalendarSyncConfigQuery.data;
   const calendarSyncMs = calendarSyncConfig?.syncIntervalMs ?? DEFAULT_MAIL_SYNC_MS;
+
+  useMessageEvents(Boolean(enabled && userId && pushEnabled && eventsEnabled));
 
   useEffect(() => {
     if (!provider || !enabled || !userId || !calendarSyncEnabled) return;
@@ -134,7 +138,7 @@ export function useBackgroundSync(
   useEffect(() => {
     if (!provider || !enabled || !userId || syncConfigPending) return;
 
-    const mailSyncKey = `${provider}:${userId}:${pushEnabled}`;
+    const mailSyncKey = `${provider}:${userId}:${pushEnabled}:${eventsEnabled}`;
     if (mailSyncKeyRef.current === mailSyncKey) return;
     mailSyncKeyRef.current = mailSyncKey;
 
@@ -184,12 +188,24 @@ export function useBackgroundSync(
 
       void runSessionStartSync();
       void runDailyMailSync();
-      document.addEventListener('visibilitychange', onVisibilityChange);
-      const uiId = setInterval(refreshUi, uiRefreshMs);
+
+      if (!eventsEnabled) {
+        refreshUi();
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        const uiId = setInterval(refreshUi, uiRefreshMs);
+        const mailId = setInterval(runDailyMailSync, mailSyncMs);
+        return () => {
+          document.removeEventListener('visibilitychange', onVisibilityChange);
+          clearInterval(uiId);
+          clearInterval(mailId);
+          if (mailSyncKeyRef.current === mailSyncKey) {
+            mailSyncKeyRef.current = null;
+          }
+        };
+      }
+
       const mailId = setInterval(runDailyMailSync, mailSyncMs);
       return () => {
-        document.removeEventListener('visibilitychange', onVisibilityChange);
-        clearInterval(uiId);
         clearInterval(mailId);
         if (mailSyncKeyRef.current === mailSyncKey) {
           mailSyncKeyRef.current = null;
@@ -220,5 +236,15 @@ export function useBackgroundSync(
         mailSyncKeyRef.current = null;
       }
     };
-  }, [provider, enabled, userId, pushEnabled, syncConfigPending, uiRefreshMs, mailSyncMs, queryClient]);
+  }, [
+    provider,
+    enabled,
+    userId,
+    pushEnabled,
+    eventsEnabled,
+    syncConfigPending,
+    uiRefreshMs,
+    mailSyncMs,
+    queryClient,
+  ]);
 }

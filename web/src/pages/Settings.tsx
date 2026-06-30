@@ -28,6 +28,8 @@ import { toast } from "sonner"
 import { useAuth } from "@/hooks/useAuth"
 import { useReopenSettingsModal } from "@/hooks/useReopenSettingsModal"
 import { api, ApiError } from "@/lib/api"
+import { downloadReportExport } from "@/hooks/useReports"
+import { rangeFromPreset } from "@/lib/reports"
 import type { UserSettings } from "@/types"
 
 const PASSWORD_ERROR_MESSAGES: Record<string, string> = {
@@ -57,6 +59,21 @@ export default function Settings() {
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [passwordSaving, setPasswordSaving] = useState(false)
+  const [exportingData, setExportingData] = useState(false)
+
+  const handleExportData = async () => {
+    setExportingData(true)
+    try {
+      const range = rangeFromPreset('30d')
+      await downloadReportExport(range, 'summary', 'csv')
+      toast.success('Engagement summary downloaded.')
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Export failed'
+      toast.error(message)
+    } finally {
+      setExportingData(false)
+    }
+  }
 
   const openSettingsModal = useCallback(() => setSettingsModalOpen(true), [])
 
@@ -480,7 +497,12 @@ export default function Settings() {
                   <Upload className="h-5 w-5" />
                   <span className="text-sm">Import Data</span>
                 </Button>
-                <Button variant="outline" className="h-20 flex flex-col items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="h-20 flex flex-col items-center gap-2"
+                  disabled={exportingData}
+                  onClick={handleExportData}
+                >
                   <Download className="h-5 w-5" />
                   <span className="text-sm">Export Data</span>
                 </Button>

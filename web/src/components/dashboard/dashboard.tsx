@@ -1,63 +1,24 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { UserFilter } from "@/components/user-filter"
+import { ReportKpiCard } from "@/components/reports/ReportKpiCard"
+import { useReportSummary } from "@/hooks/useReports"
+import { rangeFromPreset } from "@/lib/reports"
 import { 
   TrendingUp, 
-  TrendingDown, 
   Users, 
-  DollarSign, 
-  Target, 
   Clock,
-  ArrowUpRight,
-  ArrowDownRight,
   Plus,
   Mail,
   Phone,
   Calendar,
-  Zap
+  Zap,
+  Target,
+  CalendarDays
 } from "lucide-react"
-
-const metrics = [
-  {
-    title: "Total Revenue",
-    value: "$2.4M",
-    change: "+12.3%",
-    trend: "up",
-    icon: DollarSign,
-    description: "vs last month",
-    route: "/reports?filter=revenue"
-  },
-  {
-    title: "Active Deals",
-    value: "147",
-    change: "+8",
-    trend: "up", 
-    icon: Target,
-    description: "in pipeline",
-    route: "/pipeline?filter=active"
-  },
-  {
-    title: "New Contacts",
-    value: "89",
-    change: "-2.1%",
-    trend: "down",
-    icon: Users,
-    description: "this week",
-    route: "/contacts?filter=new"
-  },
-  {
-    title: "Close Rate",
-    value: "23.4%",
-    change: "+1.2%",
-    trend: "up",
-    icon: TrendingUp,
-    description: "last 30 days",
-    route: "/reports?filter=close-rate"
-  }
-]
 
 const recentActivity = [
   {
@@ -163,6 +124,10 @@ const upcomingTasks = [
 export function Dashboard() {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([])
   const navigate = useNavigate()
+  const dateRange = useMemo(() => rangeFromPreset('30d'), [])
+  const summaryQuery = useReportSummary(dateRange)
+  const summary = summaryQuery.data
+  const loading = summaryQuery.isLoading
 
   const filteredActivity = selectedUsers.length === 0 
     ? recentActivity 
@@ -174,11 +139,10 @@ export function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold gradient-text">Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back! Here's what's happening with your sales.</p>
+          <p className="text-muted-foreground">Workspace engagement at a glance.</p>
         </div>
         <div className="flex items-center gap-3">
           <UserFilter 
@@ -192,43 +156,40 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {metrics.map((metric) => (
-          <Card 
-            key={metric.title} 
-            className="hover-glow hover:scale-105 transition-all duration-300 bg-gradient-surface border-border/50 cursor-pointer"
-            onClick={() => navigate(metric.route)}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {metric.title}
-              </CardTitle>
-              <metric.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{metric.value}</div>
-              <div className="flex items-center gap-1 text-xs">
-                <span className={`flex items-center gap-1 ${
-                  metric.trend === "up" ? "text-success" : "text-destructive"
-                }`}>
-                  {metric.trend === "up" ? (
-                    <ArrowUpRight className="h-3 w-3" />
-                  ) : (
-                    <ArrowDownRight className="h-3 w-3" />
-                  )}
-                  {metric.change}
-                </span>
-                <span className="text-muted-foreground">{metric.description}</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <ReportKpiCard
+          title="Total Contacts"
+          icon={Users}
+          kpi={summary?.kpis.totalContacts}
+          loading={loading}
+          showChange={false}
+          description="all time"
+          onClick={() => navigate('/contacts')}
+        />
+        <ReportKpiCard
+          title="New Contacts"
+          icon={TrendingUp}
+          kpi={summary?.kpis.newContacts}
+          loading={loading}
+          onClick={() => navigate('/reports?filter=contacts')}
+        />
+        <ReportKpiCard
+          title="Emails Sent"
+          icon={Mail}
+          kpi={summary?.kpis.emailsSent}
+          loading={loading}
+          onClick={() => navigate('/reports?tab=activity')}
+        />
+        <ReportKpiCard
+          title="Meetings"
+          icon={CalendarDays}
+          kpi={summary?.kpis.meetingsScheduled}
+          loading={loading}
+          onClick={() => navigate('/calendar')}
+        />
       </div>
 
-      {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Activity */}
         <Card className="lg:col-span-2 bg-gradient-surface border-border/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -236,7 +197,7 @@ export function Dashboard() {
               Recent Activity
             </CardTitle>
             <CardDescription>
-              Latest updates from your sales pipeline
+              Latest updates from your workspace
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -285,7 +246,6 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Upcoming Tasks */}
         <Card className="bg-gradient-surface border-border/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

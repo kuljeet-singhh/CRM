@@ -34,6 +34,7 @@ export function EmailDetail({
         `/api/messages/thread/${encodeURIComponent(threadId!)}`
       ),
     enabled: open && Boolean(threadId),
+    staleTime: 0,
   });
 
   const threadMessages = threadId

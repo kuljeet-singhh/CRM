@@ -8,7 +8,9 @@ import {
 
 export type SyncUserGmailResult = {
   messagesAdded: number;
+  messagesUpdated: number;
   messagesRemoved: number;
+  messagesLabeled: number;
   contactsTouched: number;
   historyId?: string;
   error?: 'no_sync_label' | 'label_not_found' | 'no_workspace';
@@ -44,19 +46,40 @@ export async function syncUserGmail(userId: string, workspaceId?: string): Promi
   });
 
   if (!user?.gmailSyncLabel) {
-    return { messagesAdded: 0, messagesRemoved: 0, contactsTouched: 0, error: 'no_sync_label' };
+    return {
+      messagesAdded: 0,
+      messagesUpdated: 0,
+      messagesRemoved: 0,
+      messagesLabeled: 0,
+      contactsTouched: 0,
+      error: 'no_sync_label',
+    };
   }
 
   const crmLabel = user.crmLabels[0];
   if (!crmLabel) {
-    return { messagesAdded: 0, messagesRemoved: 0, contactsTouched: 0, error: 'no_sync_label' };
+    return {
+      messagesAdded: 0,
+      messagesUpdated: 0,
+      messagesRemoved: 0,
+      messagesLabeled: 0,
+      contactsTouched: 0,
+      error: 'no_sync_label',
+    };
   }
 
   let wsId = workspaceId;
   if (!wsId) {
     const membership = await prisma.membership.findFirst({ where: { userId } });
     if (!membership) {
-      return { messagesAdded: 0, messagesRemoved: 0, contactsTouched: 0, error: 'no_workspace' };
+      return {
+        messagesAdded: 0,
+        messagesUpdated: 0,
+        messagesRemoved: 0,
+        messagesLabeled: 0,
+        contactsTouched: 0,
+        error: 'no_workspace',
+      };
     }
     wsId = membership.workspaceId;
   }
@@ -64,28 +87,34 @@ export async function syncUserGmail(userId: string, workspaceId?: string): Promi
   const labelId = crmLabel.labelId;
   const gmail = await getAuthorizedClient(userId);
 
-  const messageIdSet = new Set<string>();
-  let removedIds: string[] = [];
-  let newHistoryId = user.gmailLastHistoryId ?? undefined;
-  let useFallbackList = !user.gmailLastHistoryId;
-
   try {
+    const labelsRes = await gmail.users.labels.list({ userId: 'me' });
+    const label = labelsRes.data.labels?.find((l) => l.id === labelId || l.name === user.gmailSyncLabel);
+    if (!label?.id) {
+      return {
+        messagesAdded: 0,
+        messagesUpdated: 0,
+        messagesRemoved: 0,
+        messagesLabeled: 0,
+        contactsTouched: 0,
+        error: 'label_not_found',
+      };
+    }
+
+    const messageIdSet = new Set<string>();
+    let removedIds: string[] = [];
+    let newHistoryId = user.gmailLastHistoryId ?? undefined;
+
     if (user.gmailLastHistoryId) {
-      const history = await collectHistoryMessageIds(gmail, user.gmailLastHistoryId, labelId);
+      const history = await collectHistoryMessageIds(gmail, user.gmailLastHistoryId, label.id);
       for (const id of history.messageIds) messageIdSet.add(id);
       removedIds = history.removedMessageIds;
       if (history.historyId) newHistoryId = history.historyId;
-      if (history.historyNotFound) useFallbackList = true;
     }
 
-    if (useFallbackList) {
-      for (const id of await listLabeledMessageIds(gmail, labelId, 100)) {
-        messageIdSet.add(id);
-      }
-    } else {
-      for (const id of await listLabeledMessageIds(gmail, labelId, 30)) {
-        messageIdSet.add(id);
-      }
+    // Always reconcile every labeled message and expand threads (catches unlabeled replies).
+    for (const id of await listLabeledMessageIds(gmail, label.id, 100)) {
+      messageIdSet.add(id);
     }
 
     const profile = await gmail.users.getProfile({ userId: 'me' });
@@ -93,14 +122,18 @@ export async function syncUserGmail(userId: string, workspaceId?: string): Promi
 
     const messagesRemoved = await removeLabeledMessages(wsId, removedIds);
 
-    const messagesAdded = await importGmailMessageIdsForCrm({
+    const contactsBefore = await prisma.contact.count({ where: { workspaceId: wsId } });
+
+    const importResult = await importGmailMessageIdsForCrm({
       userId,
       workspaceId: wsId,
       userEmail: user.email,
-      labelId,
+      labelId: label.id,
       messageIds: [...messageIdSet],
       gmail,
     });
+
+    const contactsAfter = await prisma.contact.count({ where: { workspaceId: wsId } });
 
     if (newHistoryId) {
       await prisma.user.update({
@@ -110,14 +143,23 @@ export async function syncUserGmail(userId: string, workspaceId?: string): Promi
     }
 
     return {
-      messagesAdded,
+      messagesAdded: importResult.messagesAdded,
+      messagesUpdated: importResult.messagesUpdated,
       messagesRemoved,
-      contactsTouched: 0,
+      messagesLabeled: importResult.messagesLabeled,
+      contactsTouched: Math.max(0, contactsAfter - contactsBefore),
       historyId: newHistoryId,
     };
   } catch (err) {
     if (isGmailNotFound(err)) {
-      return { messagesAdded: 0, messagesRemoved: 0, contactsTouched: 0, error: 'label_not_found' };
+      return {
+        messagesAdded: 0,
+        messagesUpdated: 0,
+        messagesRemoved: 0,
+        messagesLabeled: 0,
+        contactsTouched: 0,
+        error: 'label_not_found',
+      };
     }
     throw err;
   }

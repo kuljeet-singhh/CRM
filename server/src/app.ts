@@ -14,6 +14,9 @@ import { outlookWebhookRouter } from './webhooks/outlookReceiver.js';
 import { devRouter } from './dev/routes.js';
 import { cronRouter } from './cron/routes.js';
 import { calendarRouter } from './calendar/routes.js';
+import { reportsRouter } from './reports/routes.js';
+import { eventsRouter } from './events/routes.js';
+import { isMessageEventsEnabled } from './events/messageBus.js';
 import { renewExpiredWatches, countWatchIssues } from './gmail/watchManager.js';
 import { countOutlookSubscriptionIssues } from './outlook/subscriptionManager.js';
 import { env, isOutlookPushEnabled } from './env.js';
@@ -57,6 +60,8 @@ export function createApp(): express.Application {
   app.use('/api/apollo', apolloRouter);
   app.use('/api/messages', messagesRouter);
   app.use('/api/calendar', calendarRouter);
+  app.use('/api/reports', reportsRouter);
+  app.use('/api/events', eventsRouter);
 
   if (!env.isProd) {
     app.use('/api/dev', devRouter);
@@ -76,6 +81,7 @@ export function createApp(): express.Application {
         outlookPushEnabled: isOutlookPushEnabled(),
         gmailWebhookPath: '/api/webhooks/gmail',
         outlookWebhookPath: '/api/webhooks/outlook',
+        messageEventsEnabled: isMessageEventsEnabled(),
       });
     } catch (e) {
       console.error('[health]', e);

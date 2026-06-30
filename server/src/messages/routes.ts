@@ -54,6 +54,19 @@ function mapMessageToInboxItem(m: {
   };
 }
 
+messagesRouter.get('/version', async (req: AuthedRequest, res) => {
+  const agg = await prisma.emailMessage.aggregate({
+    where: { workspaceId: req.workspaceId! },
+    _max: { updatedAt: true },
+    _count: { id: true },
+  });
+
+  res.json({
+    version: agg._max.updatedAt?.toISOString() ?? null,
+    count: agg._count.id,
+  });
+});
+
 messagesRouter.get('/thread/:threadId', async (req: AuthedRequest, res) => {
   const threadId = req.params.threadId;
   if (!threadId) {

@@ -10,7 +10,7 @@ function mapSyncResult(result: SyncUserGmailResult) {
   }
   return {
     messagesAdded: result.messagesAdded,
-    messagesUpdated: result.messagesRemoved,
+    messagesUpdated: result.messagesUpdated,
     historyId: result.historyId,
   };
 }
