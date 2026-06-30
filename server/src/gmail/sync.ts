@@ -10,7 +10,7 @@ export async function manualGmailSync(userId: string, workspaceId: string) {
   }
   return {
     messagesAdded: result.messagesAdded,
-    messagesUpdated: result.messagesRemoved,
+    messagesUpdated: result.messagesUpdated,
     historyId: result.historyId,
   };
 }

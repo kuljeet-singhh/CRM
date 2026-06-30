@@ -2,6 +2,13 @@ import type { gmail_v1 } from 'googleapis';
 import { prisma } from '../db.js';
 import { getAuthorizedClient } from '../auth/tokens.js';
 import { processGmailMessageForCrm } from './send.js';
+import { applyCrmLabelToThreadMessages } from './threadLabel.js';
+
+export type ImportThreadResult = {
+  messagesAdded: number;
+  messagesUpdated: number;
+  messagesLabeled: number;
+};
 
 export async function listLabeledMessageIds(
   gmail: gmail_v1.Gmail,
@@ -72,7 +79,7 @@ export async function importGmailThreadForCrm(params: {
   userEmail: string;
   threadId: string;
   labelId: string;
-}): Promise<number> {
+}): Promise<ImportThreadResult> {
   const gmail = await getAuthorizedClient(params.userId);
   const thread = await gmail.users.threads.get({
     userId: 'me',
@@ -82,9 +89,12 @@ export async function importGmailThreadForCrm(params: {
 
   const messages = thread.data.messages ?? [];
   const threadHasCrmLabel = messages.some((m) => m.labelIds?.includes(params.labelId));
-  if (!threadHasCrmLabel) return 0;
+  if (!threadHasCrmLabel) {
+    return { messagesAdded: 0, messagesUpdated: 0, messagesLabeled: 0 };
+  }
 
   let messagesAdded = 0;
+  let messagesUpdated = 0;
   for (const m of messages) {
     if (!m.id) continue;
     const before = await prisma.emailMessage.findUnique({
@@ -103,8 +113,16 @@ export async function importGmailThreadForCrm(params: {
       skipLabelCheck: true,
     });
     if (result && !before) messagesAdded++;
+    else if (result && before) messagesUpdated++;
   }
-  return messagesAdded;
+
+  const messagesLabeled = await applyCrmLabelToThreadMessages(
+    gmail,
+    params.threadId,
+    params.labelId
+  );
+
+  return { messagesAdded, messagesUpdated, messagesLabeled };
 }
 
 export async function importGmailMessageIdsForCrm(params: {
@@ -113,10 +131,12 @@ export async function importGmailMessageIdsForCrm(params: {
   userEmail: string;
   labelId: string;
   messageIds: string[];
-}): Promise<number> {
+}): Promise<ImportThreadResult> {
   const gmail = await getAuthorizedClient(params.userId);
   const threadsDone = new Set<string>();
   let messagesAdded = 0;
+  let messagesUpdated = 0;
+  let messagesLabeled = 0;
 
   for (const messageId of [...new Set(params.messageIds)]) {
     const meta = await gmail.users.messages.get({
@@ -129,13 +149,16 @@ export async function importGmailMessageIdsForCrm(params: {
     if (threadId) {
       if (threadsDone.has(threadId)) continue;
       threadsDone.add(threadId);
-      messagesAdded += await importGmailThreadForCrm({
+      const threadResult = await importGmailThreadForCrm({
         userId: params.userId,
         workspaceId: params.workspaceId,
         userEmail: params.userEmail,
         threadId,
         labelId: params.labelId,
       });
+      messagesAdded += threadResult.messagesAdded;
+      messagesUpdated += threadResult.messagesUpdated;
+      messagesLabeled += threadResult.messagesLabeled;
       continue;
     }
 
@@ -158,7 +181,8 @@ export async function importGmailMessageIdsForCrm(params: {
       skipLabelCheck: hasLabel,
     });
     if (result && !before) messagesAdded++;
+    else if (result && before) messagesUpdated++;
   }
 
-  return messagesAdded;
+  return { messagesAdded, messagesUpdated, messagesLabeled };
 }

@@ -5,10 +5,11 @@ import { api } from '@/lib/api';
 import { mailApiBase } from '@/lib/provider';
 import { syncToastMessage } from '@/lib/syncResult';
 import { usePreferences } from '@/lib/preferences';
+import { useMessageEvents } from '@/hooks/useMessageEvents';
 import type { CalendarSyncConfig, CalendarSyncResult, GmailSyncConfig, MailProvider, SyncResult } from '@/types';
 
 const POLL_SYNC_INTERVAL_MS = 3 * 60 * 1000;
-const DEFAULT_UI_REFRESH_MS = 15_000;
+const DEFAULT_UI_REFRESH_FALLBACK_MS = 60_000;
 const DEFAULT_MAIL_SYNC_MS = 86_400_000;
 
 function dailySyncStorageKey(userId: string) {
@@ -102,11 +103,14 @@ export function useBackgroundSync(
         : false;
 
   const pushEnabled = Boolean(syncConfig?.pushEnabled);
-  const uiRefreshMs = syncConfig?.uiRefreshIntervalMs ?? DEFAULT_UI_REFRESH_MS;
+  const eventsEnabled = Boolean(syncConfig?.eventsEnabled);
+  const uiRefreshMs = syncConfig?.uiRefreshIntervalMs || DEFAULT_UI_REFRESH_FALLBACK_MS;
   const mailSyncMs = syncConfig?.mailSyncIntervalMs ?? DEFAULT_MAIL_SYNC_MS;
   const calendarSyncConfig =
     provider === 'gmail' ? gmailCalendarSyncConfigQuery.data : outlookCalendarSyncConfigQuery.data;
   const calendarSyncMs = calendarSyncConfig?.syncIntervalMs ?? DEFAULT_MAIL_SYNC_MS;
+
+  useMessageEvents(Boolean(enabled && userId && pushEnabled && eventsEnabled));
 
   useEffect(() => {
     if (!provider || !enabled || !userId || !calendarSyncEnabled) return;
@@ -174,15 +178,21 @@ export function useBackgroundSync(
         }
       };
 
-      refreshUi();
       void runSessionStartSync();
       void runDailyMailSync();
-      const uiId = setInterval(refreshUi, uiRefreshMs);
+
+      if (!eventsEnabled) {
+        refreshUi();
+        const uiId = setInterval(refreshUi, uiRefreshMs);
+        const mailId = setInterval(runDailyMailSync, mailSyncMs);
+        return () => {
+          clearInterval(uiId);
+          clearInterval(mailId);
+        };
+      }
+
       const mailId = setInterval(runDailyMailSync, mailSyncMs);
-      return () => {
-        clearInterval(uiId);
-        clearInterval(mailId);
-      };
+      return () => clearInterval(mailId);
     }
 
     const runPollSync = async () => {
@@ -208,6 +218,7 @@ export function useBackgroundSync(
     enabled,
     userId,
     pushEnabled,
+    eventsEnabled,
     syncConfigPending,
     uiRefreshMs,
     mailSyncMs,

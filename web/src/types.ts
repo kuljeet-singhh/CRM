@@ -156,8 +156,14 @@ export interface CalendarSyncResult {
 
 export interface GmailSyncConfig {
   pushEnabled: boolean;
+  eventsEnabled: boolean;
   mailSyncIntervalMs: number;
   uiRefreshIntervalMs: number;
+}
+
+export interface MessagesVersion {
+  version: string | null;
+  count: number;
 }
 
 export interface CrmContact {

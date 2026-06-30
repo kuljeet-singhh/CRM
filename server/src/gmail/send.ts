@@ -4,6 +4,7 @@ import { logEmailToCrm } from '../contacts/upsert.js';
 import { buildMimeMessage, toBase64Url } from './mime.js';
 import { parseAddressList, parseEmailAddress } from './parser.js';
 import { extractBody } from './body.js';
+import { applyCrmLabelToThreadMessages } from './threadLabel.js';
 
 export async function sendGmailMessage(params: {
   userId: string;
@@ -43,15 +44,21 @@ export async function sendGmailMessage(params: {
   const full = await gmail.users.messages.get({ userId: 'me', id: messageId, format: 'metadata' });
   const rfcId = full.data.payload?.headers?.find((h) => h.name?.toLowerCase() === 'message-id')?.value;
 
+  const threadId = full.data.threadId ?? params.gmailThreadId;
+
   if (user?.gmailSyncLabel) {
     const labels = await gmail.users.labels.list({ userId: 'me' });
     const label = labels.data.labels?.find((l) => l.name === user.gmailSyncLabel);
     if (label?.id) {
-      await gmail.users.messages.modify({
-        userId: 'me',
-        id: messageId,
-        requestBody: { addLabelIds: [label.id] },
-      });
+      if (threadId) {
+        await applyCrmLabelToThreadMessages(gmail, threadId, label.id);
+      } else {
+        await gmail.users.messages.modify({
+          userId: 'me',
+          id: messageId,
+          requestBody: { addLabelIds: [label.id] },
+        });
+      }
     }
   }
 
@@ -64,7 +71,7 @@ export async function sendGmailMessage(params: {
   await logEmailToCrm({
     workspaceId: params.workspaceId,
     gmailMessageId: messageId,
-    gmailThreadId: full.data.threadId ?? params.gmailThreadId,
+    gmailThreadId: threadId,
     rfcMessageId: rfcId ?? undefined,
     subject: params.subject,
     bodyText: params.body,
@@ -73,7 +80,7 @@ export async function sendGmailMessage(params: {
     participants,
   });
 
-  return { messageId, threadId: full.data.threadId, rfcMessageId: rfcId };
+  return { messageId, threadId, rfcMessageId: rfcId };
 }
 
 export async function processGmailMessageForCrm(params: {

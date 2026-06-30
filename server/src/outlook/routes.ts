@@ -3,6 +3,7 @@ import { prisma } from '../db.js';
 import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
 import { getOutlookAccessToken } from '../auth/tokens.js';
 import { isOutlookPushEnabled } from '../env.js';
+import { isMessageEventsEnabled } from '../events/messageBus.js';
 import { sendOutlookMessage } from './send.js';
 import { manualOutlookSync } from './sync.js';
 import { outlookCalendarRouter } from './calendar/routes.js';
@@ -12,14 +13,16 @@ export const outlookRouter = Router();
 outlookRouter.use(requireAuth);
 outlookRouter.use('/calendar', outlookCalendarRouter);
 
-const UI_REFRESH_INTERVAL_MS = 15_000;
+const UI_REFRESH_FALLBACK_MS = 60_000;
 const MAIL_SYNC_INTERVAL_MS = 86_400_000;
 
 outlookRouter.get('/sync-config', (_req: AuthedRequest, res) => {
+  const eventsEnabled = isMessageEventsEnabled();
   res.json({
     pushEnabled: isOutlookPushEnabled(),
+    eventsEnabled,
     mailSyncIntervalMs: MAIL_SYNC_INTERVAL_MS,
-    uiRefreshIntervalMs: UI_REFRESH_INTERVAL_MS,
+    uiRefreshIntervalMs: eventsEnabled ? 0 : UI_REFRESH_FALLBACK_MS,
   });
 });
 
