@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../../db.js';
 import { decodeGmailPushData } from './decode.js';
-import { runGmailSyncForUser } from '../syncRunner.js';
+import { scheduleGmailSync } from '../syncRunner.js';
 import { verifyGmailPubSubPushAuth } from './auth.js';
 
 export const gmailWebhookRouter = Router();
@@ -63,7 +63,7 @@ gmailWebhookRouter.post('/gmail', async (req, res) => {
       return;
     }
 
-    await runGmailSyncForUser(user.id, 'webhook');
+    scheduleGmailSync(user.id, 'webhook');
     res.status(200).end();
   } catch (err) {
     console.error('[gmail-webhook] processing_failed', err);

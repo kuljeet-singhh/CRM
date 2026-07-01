@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
-const { runGmailSyncForUser, verifyGmailPubSubPushAuth } = vi.hoisted(() => ({
-  runGmailSyncForUser: vi.fn().mockResolvedValue(undefined),
+const { scheduleGmailSync, verifyGmailPubSubPushAuth } = vi.hoisted(() => ({
+  scheduleGmailSync: vi.fn(),
   verifyGmailPubSubPushAuth: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 vi.mock('../gmail/syncRunner.js', () => ({
-  runGmailSyncForUser,
+  scheduleGmailSync,
 }));
 
 vi.mock('../gmail/gmailWebhook/auth.js', () => ({
@@ -44,7 +44,7 @@ describe('gmail webhook', () => {
       .send({ message: {} });
 
     expect(res.status).toBe(200);
-    expect(runGmailSyncForUser).not.toHaveBeenCalled();
+    expect(scheduleGmailSync).not.toHaveBeenCalled();
   });
 
   it('returns 400 for invalid decoded payload', async () => {
@@ -55,7 +55,7 @@ describe('gmail webhook', () => {
       .send({ message: { data } });
 
     expect(res.status).toBe(400);
-    expect(runGmailSyncForUser).not.toHaveBeenCalled();
+    expect(scheduleGmailSync).not.toHaveBeenCalled();
   });
 
   it('returns 401 when Pub/Sub OIDC auth fails', async () => {
@@ -70,10 +70,10 @@ describe('gmail webhook', () => {
       .send({ message: { data: 'abc' } });
 
     expect(res.status).toBe(401);
-    expect(runGmailSyncForUser).not.toHaveBeenCalled();
+    expect(scheduleGmailSync).not.toHaveBeenCalled();
   });
 
-  it('runs sync when user and label exist', async () => {
+  it('schedules debounced sync when user and label exist', async () => {
     vi.mocked(prisma.user.findFirst).mockResolvedValue({
       id: 'u1',
       email: 'user@gmail.com',
@@ -95,6 +95,6 @@ describe('gmail webhook', () => {
       .send({ message: { data } });
 
     expect(res.status).toBe(200);
-    expect(runGmailSyncForUser).toHaveBeenCalledWith('u1', 'webhook');
+    expect(scheduleGmailSync).toHaveBeenCalledWith('u1', 'webhook');
   });
 });
