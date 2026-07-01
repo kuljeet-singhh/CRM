@@ -12,7 +12,13 @@ export class ApiError extends Error {
   }
 }
 
-const SKIP_BOOTSTRAP = new Set(['/auth/refresh', '/auth/login', '/auth/register', '/auth/logout']);
+const SKIP_BOOTSTRAP = new Set([
+  '/auth/refresh',
+  '/auth/login',
+  '/auth/register',
+  '/auth/logout',
+  '/auth/session/bootstrap',
+]);
 
 let refreshPromise: Promise<string | null> | null = null;
 
@@ -25,11 +31,15 @@ async function refreshAccessToken(): Promise<string | null> {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
         });
-        if (!res.ok) return null;
+        if (!res.ok) {
+          setAccessToken(null);
+          return null;
+        }
         const body = (await res.json()) as { accessToken: string };
         setAccessToken(body.accessToken);
         return body.accessToken;
       } catch {
+        setAccessToken(null);
         return null;
       } finally {
         refreshPromise = null;
@@ -37,6 +47,22 @@ async function refreshAccessToken(): Promise<string | null> {
     })();
   }
   return refreshPromise;
+}
+
+export async function bootstrapSession(accessToken: string): Promise<boolean> {
+  try {
+    const res = await fetch('/auth/session/bootstrap', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function restoreSession(): Promise<boolean> {

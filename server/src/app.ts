@@ -79,6 +79,8 @@ export function createApp(): express.Application {
         usersWithOutlookSubscriptionIssues: outlookSubIssues,
         gmailPushEnabled: Boolean(env.gmailPubsubTopic),
         gmailWebhookAudienceConfigured: Boolean(env.googleWebhookAudience),
+        webOrigin: env.webOrigin,
+        googleRedirectUri: env.googleRedirectUri,
         outlookPushEnabled: isOutlookPushEnabled(),
         gmailWebhookPath: '/api/webhooks/gmail',
         outlookWebhookPath: '/api/webhooks/outlook',

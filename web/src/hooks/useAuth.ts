@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { api, restoreSession } from '@/lib/api';
+import { api, bootstrapSession, restoreSession } from '@/lib/api';
 import { setAccessToken } from '@/lib/authStore';
 import type { Me } from '@/types';
 
@@ -48,6 +48,7 @@ export function useAuth() {
 
   const captureOAuthToken = async (token: string) => {
     setAccessToken(token);
+    await bootstrapSession(token);
     await queryClient.refetchQueries({ queryKey: ['auth', 'me'] });
   };
 

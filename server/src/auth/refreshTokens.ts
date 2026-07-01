@@ -24,7 +24,7 @@ function parseRefreshTtlMs(): number {
   return n * (multipliers[unit] ?? multipliers.d);
 }
 
-export async function issueTokenPair(userId: string): Promise<{ accessToken: string; refreshToken: string }> {
+export async function issueRefreshTokenOnly(userId: string): Promise<string> {
   const jti = crypto.randomUUID();
   const refreshToken = signRefreshToken(userId, jti);
   const expiresAt = new Date(Date.now() + parseRefreshTtlMs());
@@ -37,10 +37,27 @@ export async function issueTokenPair(userId: string): Promise<{ accessToken: str
     },
   });
 
+  return refreshToken;
+}
+
+export async function issueTokenPair(userId: string): Promise<{ accessToken: string; refreshToken: string }> {
+  const refreshToken = await issueRefreshTokenOnly(userId);
   return {
     accessToken: signAccessToken(userId),
     refreshToken,
   };
+}
+
+export async function isRefreshTokenValid(rawRefreshToken: string, userId: string): Promise<boolean> {
+  const payload = verifyRefreshToken(rawRefreshToken);
+  if (!payload || payload.sub !== userId) return false;
+
+  const existing = await prisma.refreshToken.findUnique({
+    where: { tokenHash: hashToken(rawRefreshToken) },
+  });
+  return Boolean(
+    existing && existing.expiresAt >= new Date() && existing.userId === userId
+  );
 }
 
 export async function rotateRefreshToken(
@@ -80,7 +97,7 @@ export function refreshCookieOptions() {
   return {
     httpOnly: true,
     secure: env.isProd,
-    sameSite: env.isProd ? ('none' as const) : ('lax' as const),
+    sameSite: 'lax' as const,
     maxAge: parseRefreshTtlMs(),
     path: '/',
   };

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api } from './api';
+import { useAuth } from '@/hooks/useAuth';
 import type { UserSettings } from '@/types';
 
 interface PreferencesContextValue {
@@ -15,6 +16,7 @@ const PreferencesContext = createContext<PreferencesContextValue>({
 });
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
+  const { user, isLoading } = useAuth();
   const [settings, setSettings] = useState<UserSettings | null>(null);
 
   const refreshSettings = async () => {
@@ -27,8 +29,12 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    if (isLoading || !user) {
+      setSettings(null);
+      return;
+    }
     refreshSettings().catch(() => {});
-  }, []);
+  }, [user?.id, isLoading]);
 
   return (
     <PreferencesContext.Provider

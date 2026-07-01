@@ -9,13 +9,16 @@ import { encrypt } from './crypto.js';
 import { ensurePersonalWorkspace } from '../workspaces/service.js';
 import { ensureGmailWatch } from '../gmail/watchManager.js';
 import {
+  issueRefreshTokenOnly,
   issueTokenPair,
+  isRefreshTokenValid,
   REFRESH_COOKIE_NAME,
   refreshCookieOptions,
   revokeOtherRefreshTokens,
   revokeRefreshToken,
   rotateRefreshToken,
 } from './refreshTokens.js';
+import { verifyRefreshToken } from './jwt.js';
 import {
   hashPassword,
   isValidEmail,
@@ -170,6 +173,7 @@ authRouter.post('/login', async (req, res) => {
 authRouter.post('/refresh', async (req, res) => {
   const raw = req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined;
   if (!raw) {
+    console.log('[auth/refresh] reason=no_refresh_token');
     res.status(401).json({ error: 'no_refresh_token' });
     return;
   }
@@ -177,7 +181,12 @@ authRouter.post('/refresh', async (req, res) => {
   try {
     const rotated = await rotateRefreshToken(raw);
     if (!rotated) {
-      clearRefreshCookie(res);
+      if (!verifyRefreshToken(raw)) {
+        clearRefreshCookie(res);
+        console.log('[auth/refresh] reason=invalid_refresh_token');
+      } else {
+        console.log('[auth/refresh] reason=rotation_race_or_expired_db');
+      }
       res.status(401).json({ error: 'invalid_refresh_token' });
       return;
     }
@@ -186,6 +195,39 @@ authRouter.post('/refresh', async (req, res) => {
     res.json({ accessToken: rotated.accessToken });
   } catch (err) {
     console.error('[auth/refresh]', err);
+    if (isPrismaConnectivityError(err)) {
+      res.status(503).json({ error: 'db_unavailable' });
+      return;
+    }
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+authRouter.post('/session/bootstrap', async (req, res) => {
+  const userId = getBearerUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: 'unauthorized' });
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    const raw = req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined;
+    if (raw && (await isRefreshTokenValid(raw, userId))) {
+      res.json({ ok: true });
+      return;
+    }
+
+    const refreshToken = await issueRefreshTokenOnly(userId);
+    setRefreshCookie(res, refreshToken);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[auth/session/bootstrap]', err);
     if (isPrismaConnectivityError(err)) {
       res.status(503).json({ error: 'db_unavailable' });
       return;

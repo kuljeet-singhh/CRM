@@ -1,11 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
+import cookieParser from 'cookie-parser';
+import crypto from 'crypto';
 import request from 'supertest';
 import { signAccessToken } from './jwt.js';
+import { issueRefreshTokenOnly } from './refreshTokens.js';
+
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 vi.mock('../db.js', () => ({
   prisma: {
     user: { findUnique: vi.fn() },
+    refreshToken: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
+    },
   },
 }));
 
@@ -48,6 +60,7 @@ import { prisma } from '../db.js';
 function createApp() {
   const app = express();
   app.use(express.json());
+  app.use(cookieParser());
   app.use('/auth', authRouter);
   return app;
 }
@@ -134,5 +147,60 @@ describe('GET /auth/me', () => {
 
     expect(res.status).toBe(503);
     expect(res.body).toEqual({ error: 'db_unavailable' });
+  });
+});
+
+describe('POST /auth/session/bootstrap', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns 401 without bearer token', async () => {
+    const res = await request(createApp()).post('/auth/session/bootstrap');
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: 'unauthorized' });
+  });
+
+  it('issues refresh cookie when bearer is valid and cookie is missing', async () => {
+    const token = signAccessToken('user-1');
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1' } as never);
+    vi.mocked(prisma.refreshToken.create).mockResolvedValue({} as never);
+
+    const res = await request(createApp())
+      .post('/auth/session/bootstrap')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(res.headers['set-cookie']?.join(';')).toContain('flycrm.refresh=');
+    expect(prisma.refreshToken.create).toHaveBeenCalled();
+  });
+
+  it('returns ok without re-issuing when refresh cookie is valid', async () => {
+    const token = signAccessToken('user-1');
+    vi.mocked(prisma.refreshToken.create).mockResolvedValue({} as never);
+    const refreshToken = await issueRefreshTokenOnly('user-1');
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1' } as never);
+    vi.mocked(prisma.refreshToken.findUnique).mockImplementation(async (args) => {
+      const where = args?.where as { tokenHash?: string };
+      if (where.tokenHash === hashToken(refreshToken)) {
+        return {
+          id: 'rt-1',
+          userId: 'user-1',
+          tokenHash: where.tokenHash,
+          expiresAt: new Date(Date.now() + 60_000),
+        } as never;
+      }
+      return null;
+    });
+
+    const res = await request(createApp())
+      .post('/auth/session/bootstrap')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', [`flycrm.refresh=${refreshToken}`]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(prisma.refreshToken.create).toHaveBeenCalledTimes(1);
   });
 });

@@ -17,7 +17,7 @@ export function setConnectCookie(res: Response, userId: string) {
   res.cookie(CONNECT_COOKIE_NAME, `${payload}.${sig}`, {
     httpOnly: true,
     secure: env.isProd,
-    sameSite: env.isProd ? 'none' : 'lax',
+    sameSite: 'lax',
     maxAge: MAX_AGE_MS,
     path: '/',
   });
