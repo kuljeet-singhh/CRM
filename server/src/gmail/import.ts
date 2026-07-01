@@ -72,6 +72,37 @@ export async function collectHistoryMessageIds(
   return { messageIds, removedMessageIds, historyId };
 }
 
+export function resolveInboxLabelId(
+  labels: { id?: string | null; name?: string | null }[] | undefined
+): string | undefined {
+  return labels?.find((l) => l.id === 'INBOX' || l.name === 'INBOX')?.id ?? undefined;
+}
+
+export function mergeHistoryCollections(
+  ...results: Array<{
+    messageIds: string[];
+    removedMessageIds: string[];
+    historyId?: string;
+    historyNotFound?: boolean;
+  }>
+): {
+  messageIds: string[];
+  removedMessageIds: string[];
+  historyId?: string;
+  historyNotFound?: boolean;
+} {
+  const messageIds = [...new Set(results.flatMap((r) => r.messageIds))];
+  const removedMessageIds = [...new Set(results.flatMap((r) => r.removedMessageIds))];
+  const historyIds = results.map((r) => r.historyId).filter((id): id is string => Boolean(id));
+  const historyId =
+    historyIds.length > 0
+      ? historyIds.reduce((latest, id) => (BigInt(id) > BigInt(latest) ? id : latest))
+      : undefined;
+  const historyNotFound = results.length > 0 && results.every((r) => r.historyNotFound);
+
+  return { messageIds, removedMessageIds, historyId, historyNotFound: historyNotFound || undefined };
+}
+
 /** Import all messages in a Gmail thread when any message has the CRM label. */
 export async function importGmailThreadForCrm(params: {
   userId: string;

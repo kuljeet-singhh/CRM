@@ -23,7 +23,6 @@ gmailWebhookRouter.post('/gmail', async (req, res) => {
     }
 
     const message = req.body?.message;
-    console.log('messageb webhook payload', message);
     if (!message?.data) {
       console.log('[gmail-webhook] no_payload');
       res.status(200).end();
@@ -37,6 +36,11 @@ gmailWebhookRouter.post('/gmail', async (req, res) => {
       res.status(400).json({ error: 'invalid_payload' });
       return;
     }
+
+    console.log('[gmail-webhook] notification', {
+      emailAddress: decoded.emailAddress,
+      historyId: decoded.historyId,
+    });
 
     const user = await prisma.user.findFirst({
       where: { email: decoded.emailAddress, authProvider: 'gmail' },

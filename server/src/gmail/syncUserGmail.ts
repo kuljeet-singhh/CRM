@@ -4,6 +4,8 @@ import {
   collectHistoryMessageIds,
   importGmailMessageIdsForCrm,
   listLabeledMessageIds,
+  mergeHistoryCollections,
+  resolveInboxLabelId,
 } from './import.js';
 
 export type SyncUserGmailOptions = {
@@ -114,7 +116,15 @@ export async function syncUserGmail(
     let newHistoryId = user.gmailLastHistoryId ?? undefined;
 
     if (user.gmailLastHistoryId) {
-      const history = await collectHistoryMessageIds(gmail, user.gmailLastHistoryId, label.id);
+      const crmHistory = await collectHistoryMessageIds(gmail, user.gmailLastHistoryId, label.id);
+      const inboxId = resolveInboxLabelId(labelsRes.data.labels ?? undefined);
+      const historyParts = [crmHistory];
+      if (inboxId && inboxId !== label.id) {
+        historyParts.push(
+          await collectHistoryMessageIds(gmail, user.gmailLastHistoryId, inboxId)
+        );
+      }
+      const history = mergeHistoryCollections(...historyParts);
       for (const id of history.messageIds) messageIdSet.add(id);
       removedIds = history.removedMessageIds;
       if (history.historyId) newHistoryId = history.historyId;

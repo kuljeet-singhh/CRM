@@ -1,4 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mergeHistoryCollections, resolveInboxLabelId } from './import.js';
+
+describe('resolveInboxLabelId', () => {
+  it('returns INBOX label id', () => {
+    expect(
+      resolveInboxLabelId([
+        { id: 'crm-label', name: 'CRM1' },
+        { id: 'INBOX', name: 'INBOX' },
+      ])
+    ).toBe('INBOX');
+  });
+});
+
+describe('mergeHistoryCollections', () => {
+  it('merges message ids and picks latest historyId', () => {
+    const merged = mergeHistoryCollections(
+      {
+        messageIds: ['a', 'b'],
+        removedMessageIds: ['x'],
+        historyId: '100',
+      },
+      {
+        messageIds: ['b', 'c'],
+        removedMessageIds: [],
+        historyId: '200',
+      }
+    );
+
+    expect(merged.messageIds).toEqual(['a', 'b', 'c']);
+    expect(merged.removedMessageIds).toEqual(['x']);
+    expect(merged.historyId).toBe('200');
+  });
+});
 
 const { prismaMock, processMock, applyLabelMock } = vi.hoisted(() => ({
   prismaMock: {

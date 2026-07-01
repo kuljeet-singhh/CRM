@@ -362,7 +362,7 @@ authRouter.get('/google/callback', async (req, res) => {
       });
       if (user.gmailSyncLabel) {
         try {
-          await ensureGmailWatch(user.id);
+          await ensureGmailWatch(user.id, { force: true });
         } catch {
           /* best-effort */
         }
@@ -419,7 +419,7 @@ authRouter.get('/google/callback', async (req, res) => {
     const workspace = await ensurePersonalWorkspace(user.id, user.name);
     if (user.gmailSyncLabel) {
       try {
-        await ensureGmailWatch(user.id);
+        await ensureGmailWatch(user.id, { force: true });
       } catch {
         /* best-effort */
       }

@@ -14,7 +14,14 @@ export function resolveGmailWatchLabelIds(
   return [crmLabelId];
 }
 
-export async function ensureGmailWatch(userId: string): Promise<{ expiresAt?: Date; warning?: string }> {
+export type EnsureGmailWatchOptions = {
+  force?: boolean;
+};
+
+export async function ensureGmailWatch(
+  userId: string,
+  options?: EnsureGmailWatchOptions
+): Promise<{ expiresAt?: Date; warning?: string }> {
   if (!env.gmailPubsubTopic) {
     console.log('[gmail-watch] skipped: GMAIL_PUBSUB_TOPIC not configured');
     return { warning: 'pubsub_not_configured' };
@@ -37,7 +44,11 @@ export async function ensureGmailWatch(userId: string): Promise<{ expiresAt?: Da
     return { warning: 'no_crm_labels' };
   }
 
-  if (user.gmailWatchExpiry && user.gmailWatchExpiry.getTime() > Date.now() + 60_000) {
+  if (
+    !options?.force &&
+    user.gmailWatchExpiry &&
+    user.gmailWatchExpiry.getTime() > Date.now() + 60_000
+  ) {
     console.log('[gmail-watch] already active');
     return { expiresAt: user.gmailWatchExpiry };
   }
@@ -68,7 +79,7 @@ export async function ensureGmailWatch(userId: string): Promise<{ expiresAt?: Da
     });
 
     console.log(
-      `[gmail-watch] Gmail watch renewed for ${userId} (labels: ${user.gmailSyncLabel}, INBOX)`
+      `[gmail-watch] Gmail watch ${options?.force ? 'force-' : ''}renewed for ${userId} (labelIds: ${watchLabelIds.join(', ')})`
     );
     return { expiresAt };
   } catch (err) {
@@ -95,7 +106,7 @@ export async function renewExpiredWatches(): Promise<number> {
 
   let renewed = 0;
   for (const u of users) {
-    const result = await ensureGmailWatch(u.id);
+    const result = await ensureGmailWatch(u.id, { force: true });
     if (result.expiresAt) renewed++;
   }
   console.log('[gmail-watch] renewal_run', { renewed, total: users.length });

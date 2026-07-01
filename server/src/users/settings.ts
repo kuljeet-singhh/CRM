@@ -203,7 +203,7 @@ settingsRouter.put('/', async (req: AuthedRequest, res) => {
           data.gmailLastHistoryId = null;
         }
 
-        const watchResult = await ensureGmailWatch(req.userId!);
+        const watchResult = await ensureGmailWatch(req.userId!, { force: true });
         watchWarning = watchResult.warning;
 
         if (labelChanged) {
