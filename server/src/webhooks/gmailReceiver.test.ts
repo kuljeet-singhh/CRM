@@ -2,12 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
-const { runGmailSyncForUser } = vi.hoisted(() => ({
+const { runGmailSyncForUser, verifyGmailPubSubPushAuth } = vi.hoisted(() => ({
   runGmailSyncForUser: vi.fn().mockResolvedValue(undefined),
+  verifyGmailPubSubPushAuth: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 vi.mock('../gmail/syncRunner.js', () => ({
   runGmailSyncForUser,
+}));
+
+vi.mock('../gmail/gmailWebhook/auth.js', () => ({
+  verifyGmailPubSubPushAuth,
 }));
 
 vi.mock('../db.js', () => ({
@@ -50,6 +55,21 @@ describe('gmail webhook', () => {
       .send({ message: { data } });
 
     expect(res.status).toBe(400);
+    expect(runGmailSyncForUser).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when Pub/Sub OIDC auth fails', async () => {
+    verifyGmailPubSubPushAuth.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      reason: 'missing_bearer',
+    });
+
+    const res = await request(createApp())
+      .post('/api/webhooks/gmail')
+      .send({ message: { data: 'abc' } });
+
+    expect(res.status).toBe(401);
     expect(runGmailSyncForUser).not.toHaveBeenCalled();
   });
 

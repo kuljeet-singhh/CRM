@@ -1,5 +1,6 @@
 import '../src/ensureDirectUrl.js';
 import express from 'express';
+import { getGoogleWebhookConfigWarning } from '../src/gmail/gmailWebhook/auth.js';
 
 function startupErrorApp(message: string): express.Application {
   const app = express();
@@ -12,6 +13,11 @@ function startupErrorApp(message: string): express.Application {
 let app: express.Application;
 
 try {
+  const webhookWarning = getGoogleWebhookConfigWarning();
+  if (webhookWarning) {
+    console.warn(`[gmail-webhook] config: ${webhookWarning}`);
+  }
+
   const { createApp } = await import('../src/app.js');
   app = createApp();
 } catch (err) {
